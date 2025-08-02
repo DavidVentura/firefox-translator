@@ -7,6 +7,8 @@ plugins {
 android {
     namespace = "dev.davidv.translator"
     compileSdk = 34
+    ndkVersion = "27.0.12077973"
+    buildToolsVersion = "34.0.0"
 
     sourceSets {
         getByName("androidTest") {
@@ -20,7 +22,7 @@ android {
         minSdk = 28 // iconv functions need 28?
         targetSdk = 34
         versionCode = 1
-        versionName = "0.0.6"
+        versionName = "0.0.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

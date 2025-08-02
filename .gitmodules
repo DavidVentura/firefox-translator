@@ -4,6 +4,3 @@
 [submodule "app/bergamot/src/main/cpp/bergamot-translator"]
 	path = app/bergamot/src/main/cpp/bergamot-translator
 	url = https://github.com/DavidVentura/bergamot-translator.git
-[submodule "app/firefox-translations-models"]
-	path = app/firefox-translations-models
-	url = git@github.com:mozilla/firefox-translations-models.git

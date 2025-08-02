@@ -33,7 +33,6 @@ set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 set(COMPILE_WASM OFF CACHE BOOL "" FORCE)
 set(COMPILE_TEST OFF CACHE BOOL "" FORCE)
 set(USE_THREADS OFF CACHE BOOL "" FORCE)
-set(CMAKE_BUILD_TYPE Release)
 
 set(INTGEMM_DONT_BUILD_TESTS ON)
 
@@ -58,6 +57,24 @@ set(COMPILE_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 set(ENABLE_CACHE_STATS OFF CACHE BOOL "" FORCE)
 set(USE_MKL OFF CACHE BOOL "" FORCE)
 
+# Reproducible builds
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-builtin-macro-redefined")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-builtin-macro-redefined")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdata-sections -ffunction-sections")
+
+# For reproducible builds
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--build-id=none")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--hash-style=gnu")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--gc-sections")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--strip-all")
+# sort strings table
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--sort-section=name")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--sort-common")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,relro")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,now")
 add_subdirectory("bergamot-translator/")
 
 
@@ -66,11 +83,10 @@ include(${CMAKE_SOURCE_DIR}/cmake/cld2.cmake)
 # Specifies libraries CMake should link to your target library. You
 # can link libraries from various origins, such as libraries defined in this
 # build script, prebuilt third-party libraries, or Android system libraries.
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdata-sections -ffunction-sections")
 target_link_libraries(${CMAKE_PROJECT_NAME}
-		PRIVATE
+        PRIVATE
         bergamot-translator
         android
         log
-		cld2
+        cld2
 )

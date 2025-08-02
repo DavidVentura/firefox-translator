@@ -2,7 +2,7 @@ FROM openjdk:17-jdk-slim
 
 # Set environment variables
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
-ENV ANDROID_NDK_VERSION=26.3.11579264
+ENV ANDROID_NDK_VERSION=27.0.12077973
 ENV ANDROID_HOME=$ANDROID_SDK_ROOT
 ENV PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
 
@@ -41,20 +41,12 @@ RUN yes | sdkmanager --licenses && \
 ENV ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION
 
 # Set working directory
-WORKDIR /workspace
+WORKDIR /build/build/dev.davidv.translator
 
-# Copy project files
-COPY . .
+# some commands run `git rev-parse --short` and may get different
+# lengths depending on git version or repo status
+RUN git config --system core.abbrev 10
 
-# Make gradlew executable
-RUN chmod +x ./gradlew
-
-# Fix Git ownership issues and initialize submodules
-RUN git config --global --add safe.directory '*' && \
-    git submodule update --init --recursive
-
-# download gradle
-RUN ./gradlew --help
-
+RUN echo "sdk.dir=${ANDROID_SDK_ROOT}" > local.properties
 # Default command to build the project
 CMD ["./gradlew", "assembleRelease"]
