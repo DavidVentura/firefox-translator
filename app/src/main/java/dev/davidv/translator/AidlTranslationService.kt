@@ -8,6 +8,7 @@ import dev.davidv.translator.ITranslationCallback
 import dev.davidv.translator.ITranslationService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class AidlTranslationService : Service() {
@@ -34,7 +35,7 @@ class AidlTranslationService : Service() {
 
   private val binder = object : ITranslationService.Stub() {
     override fun translate(textToTranslate: String?, fromLanguageStr: String?, toLanguageStr: String?, callback: ITranslationCallback?) {
-      Log.d(TAG, "translate txt: $textToTranslate, from:$fromLanguageStr, to:$toLanguageStr, cb = ${callback != null}")
+      Log.d(TAG, "txt len:${textToTranslate?.length ?: -1}, from:$fromLanguageStr, to:$toLanguageStr, cb = ${callback != null}")
 
       if (textToTranslate == null || callback == null) {
         Log.w(TAG, "translate: textToTranslate or callback is null")
@@ -44,34 +45,39 @@ class AidlTranslationService : Service() {
       val fromLanguage = fromLanguageStr?.takeIf { it.isNotEmpty() }?.let { lng -> Language.entries.find { it.code == lng } }
       val toLanguage = toLanguageStr?.takeIf { it.isNotEmpty() }?.let { lng -> Language.entries.find { it.code == lng } }
 
-      CoroutineScope(Dispatchers.IO).launch {
-        val from = fromLanguage ?: translationCoordinator.detectLanguageRobust(textToTranslate, null)
-        if (from != null) {
-          val to = toLanguage ?: SettingsManager(applicationContext).settings.value.defaultTargetLanguage
-          val result = translationCoordinator.translateText(from, to, textToTranslate)
-          when (result) {
-            is TranslationResult.Success -> {
-              val translatedText = result.result.translated
-              Log.d(TAG, "translated text: $translatedText")
-              callback.onTranslationResult(translatedText)
-            }
-
-            is TranslationResult.Error -> {
-              val errorMessage = "Error: " + result.message
-              Log.d(TAG, errorMessage)
-              callback.onTranslationError(errorMessage)
-            }
-
-            null -> {
-              val errorMessage = "Error: Translation failed"
-              Log.d(TAG, errorMessage)
-              callback.onTranslationError(errorMessage)
-            }
+      synchronized (this) {
+        CoroutineScope(Dispatchers.IO).launch {
+          while (translationCoordinator.isTranslating.value) {
+            delay(100)
           }
-        } else {
-          val errorMessage = "Error: Could not detect language"
-          Log.d(TAG, errorMessage)
-          callback.onTranslationError(errorMessage)
+          val from = fromLanguage ?: translationCoordinator.detectLanguageRobust(textToTranslate, null)
+          if (from != null) {
+            val to = toLanguage ?: SettingsManager(applicationContext).settings.value.defaultTargetLanguage
+            val result = translationCoordinator.translateText(from, to, textToTranslate)
+            when (result) {
+              is TranslationResult.Success -> {
+                val translatedText = result.result.translated
+                Log.d(TAG, "translated text: $translatedText")
+                callback.onTranslationResult(translatedText)
+              }
+
+              is TranslationResult.Error -> {
+                val errorMessage = "Error: " + result.message
+                Log.d(TAG, errorMessage)
+                callback.onTranslationError(errorMessage)
+              }
+
+              null -> {
+                val errorMessage = "Error: Translation failed"
+                Log.d(TAG, errorMessage)
+                callback.onTranslationError(errorMessage)
+              }
+            }
+          } else {
+            val errorMessage = "Error: Could not detect language"
+            Log.d(TAG, errorMessage)
+            callback.onTranslationError(errorMessage)
+          }
         }
       }
     }
