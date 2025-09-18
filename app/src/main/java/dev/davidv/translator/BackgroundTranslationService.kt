@@ -25,7 +25,7 @@ class BackgroundTranslationService : Service() {
         val translationService = TranslationService(settingsManager, filePathManager)
         val languageDetector = LanguageDetector()
         val imageProcessor = ImageProcessor(this, OCRService(filePathManager))
-        translationCoordinator = TranslationCoordinator(this, translationService, languageDetector, imageProcessor, settingsManager)
+        translationCoordinator = TranslationCoordinator(this, translationService, languageDetector, imageProcessor, settingsManager, false)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

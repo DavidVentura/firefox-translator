@@ -24,7 +24,7 @@ class AidlTranslationService : Service() {
     val translationService = TranslationService(settingsManager, filePathManager)
     val languageDetector = LanguageDetector()
     val imageProcessor = ImageProcessor(this, OCRService(filePathManager))
-    translationCoordinator = TranslationCoordinator(this, translationService, languageDetector, imageProcessor, settingsManager)
+    translationCoordinator = TranslationCoordinator(this, translationService, languageDetector, imageProcessor, settingsManager, false)
     Log.d(TAG, "onCreate")
   }
 

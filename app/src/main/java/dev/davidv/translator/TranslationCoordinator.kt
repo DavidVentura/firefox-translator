@@ -33,6 +33,7 @@ class TranslationCoordinator(
   private val languageDetector: LanguageDetector,
   private val imageProcessor: ImageProcessor,
   private val settingsManager: SettingsManager,
+  private val enableToast: Boolean = true,
 ) {
   private val _isTranslating = MutableStateFlow(false)
   val isTranslating: StateFlow<Boolean> = _isTranslating.asStateFlow()
@@ -61,12 +62,13 @@ class TranslationCoordinator(
     return when (result) {
       is TranslationResult.Success -> result
       is TranslationResult.Error -> {
-        Toast
-          .makeText(
-            context,
-            "Translation error: ${result.message}",
-            Toast.LENGTH_SHORT,
-          ).show()
+        if (enableToast)
+          Toast
+            .makeText(
+              context,
+              "Translation error: ${result.message}",
+              Toast.LENGTH_SHORT,
+            ).show()
         null
       }
     }
@@ -120,12 +122,13 @@ class TranslationCoordinator(
         when (val result = translationService.translate(from, to, text)) {
           is TranslationResult.Success -> result.result.translated
           is TranslationResult.Error -> {
-            Toast
-              .makeText(
-                context,
-                "Translation error: ${result.message}",
-                Toast.LENGTH_SHORT,
-              ).show()
+            if (enableToast)
+              Toast
+                .makeText(
+                  context,
+                  "Translation error: ${result.message}",
+                  Toast.LENGTH_SHORT,
+                ).show()
             "Error"
           }
         }
@@ -166,9 +169,10 @@ class TranslationCoordinator(
       )
     } catch (e: Exception) {
       Log.e("TranslationCoordinator", "Exception ${e.stackTrace}")
-      Toast
-        .makeText(context, "Image processing error: ${e.message}", Toast.LENGTH_SHORT)
-        .show()
+      if (enableToast)
+        Toast
+          .makeText(context, "Image processing error: ${e.message}", Toast.LENGTH_SHORT)
+          .show()
       null
     } finally {
       _isOcrInProgress.value = false
