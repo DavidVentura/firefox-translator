@@ -13,6 +13,9 @@ android {
   buildToolsVersion = "34.0.0"
 
   sourceSets {
+    getByName("main") {
+      aidl.srcDir("src/main/aidl")
+    }
     getByName("androidTest") {
       assets {
         srcDirs("src/androidTest/assets")
@@ -70,6 +73,7 @@ android {
     jvmTarget = "11"
   }
   buildFeatures {
+    aidl = true
     compose = true
   }
 }
