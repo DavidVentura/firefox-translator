@@ -49,9 +49,13 @@ class BackgroundTranslationService : Service() {
                             is TranslationResult.Error -> "Error: " + result.message
                             null -> "Error: Translation failed"
                         }
-                        Log.d(TAG, "translated text: $translatedText")
+                        val bundleKey = when (result) {
+                          is TranslationResult.Success -> "translated_text"
+                          else -> "error"
+                        }
+                        Log.d(TAG, "$bundleKey: $translatedText")
                         val bundle = Bundle()
-                        bundle.putString("translated_text", translatedText)
+                        bundle.putString(bundleKey, translatedText)
                         val msg = Message.obtain()
                         msg.data = bundle
                       receiver.send(msg)
