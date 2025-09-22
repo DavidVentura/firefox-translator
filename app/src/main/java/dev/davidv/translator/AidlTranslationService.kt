@@ -45,39 +45,37 @@ class AidlTranslationService : Service() {
       val fromLanguage = fromLanguageStr?.takeIf { it.isNotEmpty() }?.let { lng -> Language.entries.find { it.code == lng } }
       val toLanguage = toLanguageStr?.takeIf { it.isNotEmpty() }?.let { lng -> Language.entries.find { it.code == lng } }
 
-      synchronized (this) {
-        CoroutineScope(Dispatchers.IO).launch {
-          while (translationCoordinator.isTranslating.value) {
-            delay(100)
-          }
-          val from = fromLanguage ?: translationCoordinator.detectLanguageRobust(textToTranslate, null)
-          if (from != null) {
-            val to = toLanguage ?: SettingsManager(applicationContext).settings.value.defaultTargetLanguage
-            val result = translationCoordinator.translateText(from, to, textToTranslate)
-            when (result) {
-              is TranslationResult.Success -> {
-                val translatedText = result.result.translated
-                Log.d(TAG, "translated text: $translatedText")
-                callback.onTranslationResult(translatedText)
-              }
-
-              is TranslationResult.Error -> {
-                val errorMessage = "Error: " + result.message
-                Log.d(TAG, errorMessage)
-                callback.onTranslationError(errorMessage)
-              }
-
-              null -> {
-                val errorMessage = "Error: Translation failed"
-                Log.d(TAG, errorMessage)
-                callback.onTranslationError(errorMessage)
-              }
+      CoroutineScope(Dispatchers.IO).launch {
+        while (translationCoordinator.isTranslating.value) {
+          delay(100)
+        }
+        val from = fromLanguage ?: translationCoordinator.detectLanguageRobust(textToTranslate, null)
+        if (from != null) {
+          val to = toLanguage ?: SettingsManager(applicationContext).settings.value.defaultTargetLanguage
+          val result = translationCoordinator.translateText(from, to, textToTranslate)
+          when (result) {
+            is TranslationResult.Success -> {
+              val translatedText = result.result.translated
+              Log.d(TAG, "translated text: $translatedText")
+              callback.onTranslationResult(translatedText)
             }
-          } else {
-            val errorMessage = "Error: Could not detect language"
-            Log.d(TAG, errorMessage)
-            callback.onTranslationError(errorMessage)
+
+            is TranslationResult.Error -> {
+              val errorMessage = "Error: " + result.message
+              Log.d(TAG, errorMessage)
+              callback.onTranslationError(errorMessage)
+            }
+
+            null -> {
+              val errorMessage = "Error: Translation failed"
+              Log.d(TAG, errorMessage)
+              callback.onTranslationError(errorMessage)
+            }
           }
+        } else {
+          val errorMessage = "Error: Could not detect language"
+          Log.d(TAG, errorMessage)
+          callback.onTranslationError(errorMessage)
         }
       }
     }
