@@ -67,6 +67,7 @@ class BackgroundTranslationService : Service() {
                       msg.data = bundle
                       receiver.send(msg)
                     }
+                  stopSelf()
                 }
             }
         } else {
@@ -75,6 +76,7 @@ class BackgroundTranslationService : Service() {
             } else {
                 Log.d(TAG, "Unknown action: ${intent?.action}")
             }
+            stopSelf()
         }
         return START_NOT_STICKY
     }
