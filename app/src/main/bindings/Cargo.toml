@@ -1,0 +1,28 @@
+[package]
+name = "bindings"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "bindings"
+path = "src/lib.rs"
+
+[dependencies]
+jni = "0.21.1"
+tarkka = { git = "https://github.com/DavidVentura/tarkka" }
+tesseract = { git = "https://github.com/DavidVentura/tesseract-rs" }
+
+[patch.crates-io]
+leptonica-sys = { git = "https://github.com/DavidVentura/leptonica-sys" }
+tesseract-sys = { git = "https://github.com/DavidVentura/tesseract-sys" }
+tesseract-plumbing = { git = "https://github.com/DavidVentura/tesseract-plumbing" }
+
+[patch."https://github.com/DavidVentura/tesseract-rs"]
+tesseract-sys = { git = "https://github.com/DavidVentura/tesseract-sys" }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+debug = false
+strip = true

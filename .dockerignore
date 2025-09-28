@@ -1,4 +1,5 @@
 app/
+./app/bergamot/.cxx
 .github
 local.properties
 *.iml

@@ -17,14 +17,12 @@
 
 package dev.davidv.translator
 
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -42,98 +40,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.ui.components.LanguageDownloadButton
+import dev.davidv.translator.ui.components.LanguageEvent
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
-data class PreviewStates(
-  val languageState: StateFlow<LanguageAvailabilityState>,
-  val downloadStates: StateFlow<Map<Language, DownloadState>>,
-)
-
-fun createPreviewStates(): PreviewStates =
-  PreviewStates(
-    languageState =
-      MutableStateFlow(
-        LanguageAvailabilityState(
-          availableLanguages = listOf(Language.ENGLISH, Language.FRENCH, Language.SPANISH),
-        ),
-      ),
-    downloadStates =
-      MutableStateFlow(
-        mapOf(
-          Language.ARABIC to DownloadState(isDownloading = true, totalSize = 10, downloaded = 5),
-          Language.ALBANIAN to DownloadState(isCancelled = true),
-        ),
-      ),
-  )
-
-@Composable
-@Preview
-fun LanguageManagerPreview() {
-  val states = createPreviewStates()
-  TranslatorTheme {
-    LanguageManagerScreen(
-      languageState = states.languageState,
-      downloadStates_ = states.downloadStates,
-    )
-  }
-}
-
-@Composable
-@Preview
-fun LanguageManagerPreviewEmbedded() {
-  TranslatorTheme {
-    LanguageManagerScreen(
-      languageState =
-        MutableStateFlow(
-          LanguageAvailabilityState(
-            availableLanguages = emptyList(),
-          ),
-        ),
-      downloadStates_ = MutableStateFlow(emptyMap()),
-      embedded = true,
-    )
-  }
-}
-
-@Composable
-@Preview
-fun LanguageManagerDialogPreview() {
-  val states = createPreviewStates()
-  TranslatorTheme {
-    LanguageManagerScreen(
-      languageState = states.languageState,
-      downloadStates_ = states.downloadStates,
-      openDialog = true,
-    )
-  }
-}
-
 @Composable
 fun LanguageManagerScreen(
   embedded: Boolean = false,
-  languageState: StateFlow<LanguageAvailabilityState>,
-  downloadStates_: StateFlow<Map<Language, DownloadState>>?,
+  title: String = "Language Packs",
+  installedLanguages: List<Language>,
+  availableLanguages: List<Language>,
+  languageAvailabilityState: LanguageAvailabilityState,
+  downloadStates: Map<Language, DownloadState>,
+  availabilityCheck: (LangAvailability) -> Boolean,
+  onEvent: (LanguageEvent) -> Unit,
   openDialog: Boolean = false,
+  description: (Language) -> String,
+  sizeBytes: (Language) -> Long,
 ) {
-  val context = LocalContext.current
-
-  val languageAvailabilityState by languageState.collectAsState()
-  val downloadStates by downloadStates_?.collectAsState() ?: remember { mutableStateOf(emptyMap()) }
-  // Separate languages into installed and available
-  val installedLanguages = languageAvailabilityState.availableLanguages.filter { it != Language.ENGLISH }.sortedBy { it.displayName }
-  val availableLanguages =
-    Language.entries
-      .filter { lang ->
-        fromEnglishFiles[lang] != null && !languageAvailabilityState.availableLanguages.contains(lang) && lang != Language.ENGLISH
-      }.sortedBy { it.displayName }
-
   var showDownloadAllDialog by remember { mutableStateOf(openDialog) }
 
   Scaffold(
@@ -149,7 +78,7 @@ fun LanguageManagerScreen(
     ) {
       if (!embedded) {
         Text(
-          text = "Language Packs",
+          text = title,
           style = MaterialTheme.typography.headlineMedium,
           modifier = Modifier.padding(bottom = 16.dp),
         )
@@ -171,9 +100,11 @@ fun LanguageManagerScreen(
           items(installedLanguages) { lang ->
             LanguageItem(
               lang = lang,
-              fullyDownloaded = true,
+              state = languageAvailabilityState.availableLanguageMap[lang]!!,
               downloadState = downloadStates[lang],
-              context = context,
+              availabilityCheck = availabilityCheck,
+              onEvent = onEvent,
+              description = description,
             )
           }
         }
@@ -209,10 +140,12 @@ fun LanguageManagerScreen(
 
           items(availableLanguages) { lang ->
             LanguageItem(
-              fullyDownloaded = false,
+              state = languageAvailabilityState.availableLanguageMap[lang] ?: LangAvailability(false, false, false),
               lang = lang,
               downloadState = downloadStates[lang],
-              context = context,
+              availabilityCheck = availabilityCheck,
+              description = description,
+              onEvent = onEvent,
             )
           }
         }
@@ -221,8 +154,15 @@ fun LanguageManagerScreen(
   }
 
   if (showDownloadAllDialog) {
-    val totalSizeBytes = availableLanguages.sumOf { it.sizeBytes }
-    val totalSizeGiB = totalSizeBytes / (1024.0 * 1024.0 * 1024.0)
+    val totalSizeBytes = availableLanguages.sumOf { sizeBytes(it) }
+    val totalSizeMiB = totalSizeBytes / (1024.0 * 1024.0)
+    val totalSizeGiB = totalSizeMiB / 1024.0
+    val sizeStr =
+      if (totalSizeMiB > 100) {
+        "%.2f GiB".format(totalSizeGiB)
+      } else {
+        "%.0f MiB".format(totalSizeMiB)
+      }
 
     AlertDialog(
       onDismissRequest = { showDownloadAllDialog = false },
@@ -234,7 +174,7 @@ fun LanguageManagerScreen(
       },
       text = {
         Text(
-          "Download size: %.2f GiB\n\n".format(totalSizeGiB) +
+          "Download size: $sizeStr\n\n" +
             "Make sure you've configured your storage location (internal/external) in settings first.",
         )
       },
@@ -242,7 +182,7 @@ fun LanguageManagerScreen(
         TextButton(
           onClick = {
             availableLanguages.forEach { language ->
-              DownloadService.startDownload(context, language)
+              onEvent(LanguageEvent.Download(language))
             }
             showDownloadAllDialog = false
           },
@@ -264,9 +204,11 @@ fun LanguageManagerScreen(
 @Composable
 private fun LanguageItem(
   lang: Language,
-  fullyDownloaded: Boolean,
+  state: LangAvailability,
   downloadState: DownloadState?,
-  context: Context,
+  description: (Language) -> String,
+  availabilityCheck: (LangAvailability) -> Boolean,
+  onEvent: (LanguageEvent) -> Unit,
 ) {
   Row(
     modifier =
@@ -282,42 +224,47 @@ private fun LanguageItem(
         style = MaterialTheme.typography.titleMedium,
       )
       Text(
-        text = "${(lang.sizeBytes / (1024 * 1024))} MB",
+        text = description(lang),
         style = MaterialTheme.typography.labelMedium,
       )
     }
-    LanguageDownloadButton(lang, downloadState, context, fullyDownloaded)
+    LanguageDownloadButton(
+      language = lang,
+      downloadState = downloadState,
+      isLanguageAvailable = availabilityCheck(state),
+      onEvent = onEvent,
+    )
   }
 }
 
 fun missingFiles(
-  dataPath: File,
+  dataFiles: Set<String>,
   lang: Language,
 ): Pair<Int, List<String>> {
-  val (toSize, toFiles) = missingFilesTo(dataPath, lang)
-  val (fromSize, fromFiles) = missingFilesFrom(dataPath, lang)
+  val (toSize, toFiles) = missingFilesTo(dataFiles, lang)
+  val (fromSize, fromFiles) = missingFilesFrom(dataFiles, lang)
   return Pair(toSize + fromSize, toFiles + fromFiles)
 }
 
 fun missingFilesFrom(
-  dataPath: File,
+  dataFiles: Set<String>,
   lang: Language,
 ): Pair<Int, List<String>> {
   val languageFiles = fromEnglishFiles[lang]!!
   val fileSizePairs = listOf(languageFiles.model, languageFiles.srcVocab, languageFiles.tgtVocab, languageFiles.lex).distinct()
-  val missingFiles = fileSizePairs.filter { (filename, _) -> !File(dataPath, filename).exists() }
+  val missingFiles = fileSizePairs.filter { (filename, _) -> filename !in dataFiles }
   val totalSize = missingFiles.sumOf { (_, size) -> size }
   val filenames = missingFiles.map { (filename, _) -> filename }
   return Pair(totalSize, filenames)
 }
 
 fun missingFilesTo(
-  dataPath: File,
+  dataFiles: Set<String>,
   lang: Language,
 ): Pair<Int, List<String>> {
   val languageFiles = toEnglishFiles[lang]!!
   val fileSizePairs = listOf(languageFiles.model, languageFiles.srcVocab, languageFiles.tgtVocab, languageFiles.lex).distinct()
-  val missingFiles = fileSizePairs.filter { (filename, _) -> !File(dataPath, filename).exists() }
+  val missingFiles = fileSizePairs.filter { (filename, _) -> filename !in dataFiles }
   val totalSize = missingFiles.sumOf { (_, size) -> size }
   val filenames = missingFiles.map { (filename, _) -> filename }
   return Pair(totalSize, filenames)
@@ -325,11 +272,106 @@ fun missingFilesTo(
 
 fun getAvailableTessLanguages(tessData: File): List<Language> = Language.entries.filter { File(tessData, it.tessFilename).exists() }
 
-fun getDownloadedLanguages(dataPath: File): List<Language> {
-  return Language.entries.filter { lang ->
-    if (lang == Language.ENGLISH) return@filter true
-    val toEnglishExists = toEnglishFiles.containsKey(lang) && missingFilesTo(dataPath, lang).second.isEmpty()
-    val fromEnglishExists = fromEnglishFiles.containsKey(lang) && missingFilesFrom(dataPath, lang).second.isEmpty()
-    toEnglishExists || fromEnglishExists
+data class PreviewStates(
+  val languageState: StateFlow<LanguageAvailabilityState>,
+  val downloadStates: StateFlow<Map<Language, DownloadState>>,
+)
+
+fun createPreviewStates(): PreviewStates =
+  PreviewStates(
+    languageState =
+      MutableStateFlow(
+        LanguageAvailabilityState(
+          availableLanguageMap =
+            mapOf(
+              Language.ENGLISH to LangAvailability(true, true, true),
+              Language.FRENCH to LangAvailability(true, true, false),
+              Language.SPANISH to LangAvailability(true, true, true),
+            ),
+        ),
+      ),
+    downloadStates =
+      MutableStateFlow(
+        mapOf(
+          Language.ARABIC to DownloadState(isDownloading = true, totalSize = 10, downloaded = 5),
+          Language.ALBANIAN to DownloadState(isCancelled = true),
+        ),
+      ),
+  )
+
+@Composable
+@Preview
+fun LanguageManagerPreview() {
+  val states = createPreviewStates()
+  val languageAvailabilityState by states.languageState.collectAsState()
+  val downloadStates by states.downloadStates.collectAsState()
+  val availLangs = languageAvailabilityState.availableLanguageMap.filterValues { it.translatorFiles }.keys
+  val installedLanguages = availLangs.filter { it != Language.ENGLISH }.sortedBy { it.displayName }
+  val availableLanguages =
+    Language.entries
+      .filter { lang ->
+        fromEnglishFiles[lang] != null && !availLangs.contains(lang) && lang != Language.ENGLISH
+      }.sortedBy { it.displayName }
+      .take(4)
+
+  TranslatorTheme {
+    LanguageManagerScreen(
+      installedLanguages = installedLanguages,
+      availableLanguages = availableLanguages,
+      languageAvailabilityState = languageAvailabilityState,
+      downloadStates = downloadStates,
+      availabilityCheck = { it.translatorFiles },
+      onEvent = {},
+      description = { "asd" },
+      sizeBytes = { 5 },
+    )
+  }
+}
+
+@Composable
+@Preview
+fun LanguageManagerPreviewEmbedded() {
+  TranslatorTheme {
+    LanguageManagerScreen(
+      embedded = true,
+      installedLanguages = emptyList(),
+      availableLanguages = emptyList(),
+      languageAvailabilityState = LanguageAvailabilityState(),
+      downloadStates = emptyMap(),
+      availabilityCheck = { it.translatorFiles },
+      onEvent = {},
+      description = { "asd" },
+      sizeBytes = { 5 },
+    )
+  }
+}
+
+@Composable
+@Preview
+fun LanguageManagerDialogPreview() {
+  val states = createPreviewStates()
+  val languageAvailabilityState by states.languageState.collectAsState()
+  val downloadStates by states.downloadStates.collectAsState()
+  val availLangs = languageAvailabilityState.availableLanguageMap.filterValues { it.translatorFiles }.keys
+  val installedLanguages = availLangs.filter { it != Language.ENGLISH }.sortedBy { it.displayName }
+  val availableLanguages =
+    Language.entries
+      .filter { lang ->
+        fromEnglishFiles[lang] != null && !availLangs.contains(lang) && lang != Language.ENGLISH
+      }.sortedBy { it.displayName }
+
+  TranslatorTheme {
+    LanguageManagerScreen(
+      installedLanguages = installedLanguages,
+      availableLanguages = availableLanguages,
+      languageAvailabilityState = languageAvailabilityState,
+      downloadStates = downloadStates,
+      availabilityCheck = { it.translatorFiles },
+      onEvent = {},
+      openDialog = true,
+      description = { "asd" },
+      // this is wrong but fine
+      sizeBytes = { it.sizeBytes.toLong() },
+    )
   }
 }

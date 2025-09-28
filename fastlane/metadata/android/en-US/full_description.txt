@@ -11,14 +11,12 @@ Features:
 • All translation happens locally
 
 
-Supports 52 languages:
+Supports 43 languages:
 
 - Albanian
 - Arabic
 - Azerbaijani
-- Belarusian
 - Bengali
-- Bosnian
 - Bulgarian
 - Catalan
 - Chinese
@@ -46,15 +44,11 @@ Supports 52 languages:
 - Lithuanian
 - Malay
 - Malayalam
-- Maltese
-- Norwegian Bokmål
-- Norwegian Nynorsk
 - Persian
 - Polish
 - Portuguese
 - Romanian
 - Russian
-- Serbian
 - Slovak
 - Slovenian
 - Spanish
@@ -63,4 +57,3 @@ Supports 52 languages:
 - Telugu
 - Turkish
 - Ukrainian
-- Vietnamese

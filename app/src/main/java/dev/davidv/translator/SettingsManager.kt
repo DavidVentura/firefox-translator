@@ -51,6 +51,14 @@ class SettingsManager(
         defaults.defaultTargetLanguage
       }
 
+    val defaultSourceLanguageCode = prefs.getString("default_source_language", null)
+    val defaultSourceLanguage =
+      if (defaultSourceLanguageCode != null) {
+        Language.entries.find { it.code == defaultSourceLanguageCode }
+      } else {
+        defaults.defaultSourceLanguage
+      }
+
     val translationModelsBaseUrl =
       prefs.getString("translation_models_base_url_v2", null)
         ?: defaults.translationModelsBaseUrl
@@ -58,6 +66,10 @@ class SettingsManager(
     val tesseractModelsBaseUrl =
       prefs.getString("tesseract_models_base_url", null)
         ?: defaults.tesseractModelsBaseUrl
+
+    val dictionaryBaseUrl =
+      prefs.getString("dictionary_base_url", null)
+        ?: defaults.dictionaryBaseUrl
 
     val backgroundModeName = prefs.getString("background_mode", null)
     val backgroundMode =
@@ -82,8 +94,10 @@ class SettingsManager(
 
     return AppSettings(
       defaultTargetLanguage = defaultTargetLanguage,
+      defaultSourceLanguage = defaultSourceLanguage,
       translationModelsBaseUrl = translationModelsBaseUrl,
       tesseractModelsBaseUrl = tesseractModelsBaseUrl,
+      dictionaryBaseUrl = dictionaryBaseUrl,
       backgroundMode = backgroundMode,
       minConfidence = minConfidence,
       maxImageSize = maxImageSize,
@@ -105,6 +119,14 @@ class SettingsManager(
         putString("default_target_language", newSettings.defaultTargetLanguage.code)
         modifiedSettings.add("default_target_language")
       }
+      if (newSettings.defaultSourceLanguage != currentSettings.defaultSourceLanguage) {
+        if (newSettings.defaultSourceLanguage != null) {
+          putString("default_source_language", newSettings.defaultSourceLanguage.code)
+        } else {
+          remove("default_source_language")
+        }
+        modifiedSettings.add("default_source_language")
+      }
       if (newSettings.translationModelsBaseUrl != currentSettings.translationModelsBaseUrl) {
         putString("translation_models_base_url_v2", newSettings.translationModelsBaseUrl)
         modifiedSettings.add("translation_models_base_url_v2")
@@ -112,6 +134,10 @@ class SettingsManager(
       if (newSettings.tesseractModelsBaseUrl != currentSettings.tesseractModelsBaseUrl) {
         putString("tesseract_models_base_url", newSettings.tesseractModelsBaseUrl)
         modifiedSettings.add("tesseract_models_base_url")
+      }
+      if (newSettings.dictionaryBaseUrl != currentSettings.dictionaryBaseUrl) {
+        putString("dictionary_base_url", newSettings.dictionaryBaseUrl)
+        modifiedSettings.add("dictionary_base_url")
       }
       if (newSettings.backgroundMode != currentSettings.backgroundMode) {
         putString("background_mode", newSettings.backgroundMode.name)

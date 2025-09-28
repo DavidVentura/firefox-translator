@@ -2,7 +2,7 @@
 
 An Android translator app that performs text and image translation completely offline using on-device models.
 
-Supports automatic language detection and transliteration for non-latin scripts.
+Supports automatic language detection and transliteration for non-latin scripts. There's also a built-in word dictionary.
 
 [<img src="https://f-droid.org/badge/get-it-on.png" alt="Get it on F-Droid"
     height="80">](https://f-droid.org/packages/dev.davidv.translator)
@@ -16,11 +16,12 @@ Language packs contain the full translation models, translation happens _on your
 
 ## Screenshots
 
-[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01_main_interface.png" width="220px">](fastlane/metadata/android/en-US/images/phoneScreenshots/01_main_interface.png)
-[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02_image_translation.png" width="220px">](fastlane/metadata/android/en-US/images/phoneScreenshots/02_image_translation.png)
-[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/04_image_translation_big.png" width="220px">](fastlane/metadata/android/en-US/images/phoneScreenshots/04_image_translation_big.png)
-[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/05_language_packs.png" width="220px">](fastlane/metadata/android/en-US/images/phoneScreenshots/05_language_packs.png)
+[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01_main_interface.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/01_main_interface.png)
+[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02_image_translation.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/02_image_translation.png)
+[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/04_image_translation_big.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/04_image_translation_big.png)
+[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/05_language_packs.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/05_language_packs.png)
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.jpg" width="360px">](fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.jpg)
+[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/07_dictionary.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/07_dictionary.png)
 
 ## Tech
 
@@ -28,6 +29,7 @@ Language packs contain the full translation models, translation happens _on your
   - The translation models run on [bergamot-translator](https://github.com/browsermt/bergamot-translator)
 - OCR models are [Tesseract4Android](https://github.com/adaptech-cz/Tesseract4Android)
 - Automatic language detection is done via [cld2](https://github.com/CLD2Owners/cld2)
+- Dictionary is based on data from Wiktionary, exported by [Kaikki](https://kaikki.org/)
 
 ## Manual offline setup
 
@@ -76,3 +78,9 @@ will sign the file built by `build.sh` (`app/build/outputs/apk/aarch64/release/a
 ### Verification info
 
 SHA-256 hash of signing certificate: `2B:38:06:E7:45:D8:09:01:8A:51:BE:58:D0:63:5F:FC:74:CC:97:33:43:94:07:AB:1E:D0:42:4A:4D:B3:E1:FB`
+
+## Funding
+
+<img src="https://nlnet.nl/logo/banner.svg" width="200px">
+
+This project was funded through the [NGI Mobifree Fund](https://nlnet.nl/mobifree), a fund established by [NLnet](https://nlnet.nl).

@@ -12,9 +12,11 @@ import aiohttp
 from pathlib import Path
 from typing import Dict, Set, Tuple
 
-COMMIT = "39a47f355e808057bbda8ee1556a546a4c6e0558"
+COMMIT = "a06d4724eb95d7452f9251cf2cc4ca2706636d74"
 TRANSLATION_BASE_URL = f"https://media.githubusercontent.com/media/mozilla/firefox-translations-models/{COMMIT}/models"
 TESSERACT_BASE_URL = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main"
+DICTIONARY_BASE_URL = "https://translator.davidv.dev/dictionaries"
+DICT_VERSION = 1
 
 # Language code to display name mapping
 LANGUAGE_NAMES = {
@@ -245,12 +247,12 @@ def get_non_english_language(pair: str) -> Tuple[str, str]:
 
 def get_best_model_type(model_types: Set[str]) -> str:
     """
-    Get the best model type based on priority: base > base-memory > tiny
+    Get the best model type based on priority: base-memory > base > tiny
     """
-    if 'base' in model_types:
-        return 'base'
-    elif 'base-memory' in model_types:
+    if 'base-memory' in model_types:
         return 'base-memory'
+    elif 'base' in model_types:
+        return 'base'
     elif 'tiny' in model_types:
         return 'tiny'
     else:
@@ -266,7 +268,7 @@ def generate_files_for_language(from_code: str, to_code: str) -> Dict[str, str]:
     lex = f"lex.50.50.{lang_pair}.s2t.bin"
 
     # Split vocab for Chinese and Japanese
-    split_vocab_langs = {'zh', 'ja'}
+    split_vocab_langs = {'zh', 'ja', 'ko'}
 
     if to_code in split_vocab_langs:
         src_vocab = f"srcvocab.{from_code}{to_code}.spm"
@@ -422,9 +424,11 @@ def generate_kotlin_enum(language_pairs: Dict[str, Set[str]], existing_sizes: di
 package dev.davidv.translator
 
 object Constants {{
+  const val DICT_VERSION = {DICT_VERSION}
   const val DEFAULT_TRANSLATION_MODELS_BASE_URL =
     "{TRANSLATION_BASE_URL}"
   const val DEFAULT_TESSERACT_MODELS_BASE_URL = "{TESSERACT_BASE_URL}"
+  const val DEFAULT_DICTIONARY_BASE_URL = "{DICTIONARY_BASE_URL}"
 }}
 
 enum class ModelType(private val pathName: String) {{

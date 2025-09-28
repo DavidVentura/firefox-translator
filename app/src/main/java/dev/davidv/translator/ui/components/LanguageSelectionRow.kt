@@ -38,18 +38,18 @@ import dev.davidv.translator.ui.theme.TranslatorTheme
 fun LanguageSelectionRow(
   from: Language,
   to: Language,
-  availableLanguages: Map<String, Boolean>,
-  translating: Boolean,
+  availableLanguages: Map<Language, Boolean>,
   onMessage: (TranslatorMessage) -> Unit,
   onSettings: (() -> Unit)?,
+  drawable: Pair<String, Int>,
 ) {
   Row(
     modifier = Modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    val fromLanguages = Language.entries.filter { x -> x != to && x != from && availableLanguages[x.code] == true }
-    val toLanguages = Language.entries.filter { x -> x != from && x != to && availableLanguages[x.code] == true }
+    val fromLanguages = Language.entries.filter { x -> x != to && x != from && availableLanguages[x] == true }
+    val toLanguages = Language.entries.filter { x -> x != from && x != to && availableLanguages[x] == true }
 
     LanguageSelector(
       selectedLanguage = from,
@@ -61,9 +61,7 @@ fun LanguageSelectionRow(
     )
 
     IconButton(onClick = {
-      if (!translating) {
-        onMessage(TranslatorMessage.SwapLanguages)
-      }
+      onMessage(TranslatorMessage.SwapLanguages)
     }) {
       Icon(
         painterResource(id = R.drawable.compare),
@@ -75,9 +73,7 @@ fun LanguageSelectionRow(
       selectedLanguage = to,
       availableLanguages = toLanguages,
       onLanguageSelected = { language ->
-        if (!translating) {
-          onMessage(TranslatorMessage.ToLang(language))
-        }
+        onMessage(TranslatorMessage.ToLang(language))
       },
       modifier = Modifier.weight(1f),
     )
@@ -85,8 +81,8 @@ fun LanguageSelectionRow(
     if (onSettings != null) {
       IconButton(onClick = onSettings) {
         Icon(
-          painterResource(id = R.drawable.settings),
-          contentDescription = "Settings",
+          painterResource(id = drawable.second),
+          contentDescription = drawable.first,
         )
       }
     }
@@ -102,14 +98,14 @@ fun LanguageSelectionRowPreview() {
       to = Language.SPANISH,
       availableLanguages =
         mapOf(
-          Language.ENGLISH.code to true,
-          Language.SPANISH.code to true,
-          Language.FRENCH.code to true,
-          Language.GERMAN.code to true,
+          Language.ENGLISH to true,
+          Language.SPANISH to true,
+          Language.FRENCH to true,
+          Language.GERMAN to true,
         ),
-      translating = false,
       onMessage = {},
       onSettings = {},
+      drawable = Pair("Settings", R.drawable.settings),
     )
   }
 }
@@ -126,14 +122,14 @@ fun LanguageSelectionRowDarkPreview() {
       to = Language.GERMAN,
       availableLanguages =
         mapOf(
-          Language.ENGLISH.code to true,
-          Language.SPANISH.code to true,
-          Language.FRENCH.code to true,
-          Language.GERMAN.code to true,
+          Language.ENGLISH to true,
+          Language.SPANISH to true,
+          Language.FRENCH to true,
+          Language.GERMAN to true,
         ),
-      translating = true,
       onMessage = {},
       onSettings = {},
+      drawable = Pair("Settings", R.drawable.settings),
     )
   }
 }

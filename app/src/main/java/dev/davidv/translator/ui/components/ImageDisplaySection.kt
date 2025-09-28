@@ -20,12 +20,13 @@ package dev.davidv.translator.ui.components
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.flow.StateFlow
@@ -41,13 +42,7 @@ fun ImageDisplaySection(
   val isTranslatingState by isTranslating.collectAsState()
   val isProcessing = isOcrInProgressState || isTranslatingState
 
-  Column {
-    if (isProcessing) {
-      LinearProgressIndicator(
-        modifier = Modifier.fillMaxWidth(),
-      )
-    }
-
+  Box {
     Image(
       bitmap = displayImage.asImageBitmap(),
       contentDescription = "Image to translate",
@@ -56,5 +51,14 @@ fun ImageDisplaySection(
           .fillMaxWidth()
           .clickable { onShowFullScreenImage() },
     )
+
+    if (isProcessing) {
+      LinearProgressIndicator(
+        modifier =
+          Modifier
+            .fillMaxWidth()
+            .align(Alignment.TopCenter),
+      )
+    }
   }
 }

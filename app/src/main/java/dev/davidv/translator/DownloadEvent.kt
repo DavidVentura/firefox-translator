@@ -18,11 +18,19 @@
 package dev.davidv.translator
 
 sealed class DownloadEvent {
-  data class NewLanguageAvailable(
+  data class NewTranslationAvailable(
     val language: Language,
   ) : DownloadEvent()
 
-  data class LanguageDeleted(
+  data class NewDictionaryAvailable(
     val language: Language,
+  ) : DownloadEvent()
+
+  data class DictionaryIndexDownloaded(
+    val index: DictionaryIndex,
+  ) : DownloadEvent()
+
+  data class DownloadError(
+    val message: String,
   ) : DownloadEvent()
 }

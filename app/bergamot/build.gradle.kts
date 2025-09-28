@@ -6,7 +6,7 @@ plugins {
 android {
   namespace = "dev.davidv.bergamot"
   compileSdk = 34
-  ndkVersion = "27.0.12077973"
+  ndkVersion = "28.0.12674087"
   buildToolsVersion = "34.0.0"
 
   defaultConfig {

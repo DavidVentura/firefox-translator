@@ -29,6 +29,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.mutableStateOf
 import dev.davidv.translator.ui.screens.TranslatorApp
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +39,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class MainActivity : ComponentActivity() {
   private var textToTranslate: String = ""
   private var launchMode: LaunchMode = LaunchMode.Normal
-  private var sharedImageUri: Uri? = null
+  private var sharedImageUri = mutableStateOf<Uri?>(null)
   private lateinit var ocrService: OCRService
   private lateinit var translationCoordinator: TranslationCoordinator
   private var downloadService: DownloadService? = null
@@ -51,14 +52,14 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
     handleIntent(intent)
 
-    val settingsManager = SettingsManager(this)
+    val settingsManager = SettingsManager(this) // 8ms
     val filePathManager = FilePathManager(this, settingsManager.settings)
     ocrService = OCRService(filePathManager)
     val imageProcessor = ImageProcessor(this, ocrService)
     val ctx = this
 
     Log.d("MainActivity", "Initializing translation service")
-    val translationService = TranslationService(settingsManager, filePathManager)
+    val translationService = TranslationService(settingsManager, filePathManager) // 40ms
     val languageDetector = LanguageDetector()
     translationCoordinator = TranslationCoordinator(ctx, translationService, languageDetector, imageProcessor, settingsManager)
 
@@ -71,7 +72,7 @@ class MainActivity : ComponentActivity() {
           settingsManager = settingsManager,
           filePathManager = filePathManager,
           downloadServiceState = downloadServiceState,
-          launchMode = launchMode,
+          initialLaunchMode = launchMode,
         )
       }
     }
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
           name: ComponentName?,
           service: IBinder?,
         ) {
+          Log.d("ServiceConnection", "download service done")
           val binder = service as DownloadService.DownloadBinder
           downloadService = binder.getService()
           _downloadServiceState.value = downloadService
@@ -109,12 +111,13 @@ class MainActivity : ComponentActivity() {
     Log.i("MainActivity", "cleaning up")
   }
 
-  override fun onNewIntent(intent: Intent?) {
+  public override fun onNewIntent(intent: Intent?) {
     super.onNewIntent(intent)
     handleIntent(intent)
   }
 
   private fun handleIntent(intent: Intent?) {
+    Log.d("MainActivity", "Got intent $intent")
     when (intent?.action) {
       Intent.ACTION_SEND -> {
         // Check if it's text or image
@@ -130,7 +133,7 @@ class MainActivity : ComponentActivity() {
         if (text != null) {
           textToTranslate = text
         } else if (imageUri != null) {
-          sharedImageUri = imageUri
+          sharedImageUri.value = imageUri
           textToTranslate = "" // Clear any existing text
         }
       }

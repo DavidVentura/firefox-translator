@@ -34,38 +34,42 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.davidv.translator.DownloadState
+import dev.davidv.translator.LangAvailability
 import dev.davidv.translator.Language
 import dev.davidv.translator.ui.theme.TranslatorTheme
 
 @Composable
 fun DetectedLanguageToast(
   detectedLanguage: Language,
-  availableLanguages: Map<String, Boolean>,
+  availableLanguages: Map<Language, LangAvailability>,
   onSwitchClick: () -> Unit,
+  onEvent: (LanguageEvent) -> Unit,
   modifier: Modifier = Modifier,
   downloadStates: Map<Language, DownloadState> = emptyMap(),
 ) {
+  val isLanguageAvailable = availableLanguages[detectedLanguage]?.translatorFiles == true
+
   Row(
     modifier =
       modifier
         .fillMaxWidth()
         .clip(RoundedCornerShape(12.dp))
         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-        .padding(horizontal = 16.dp, vertical = 12.dp),
+        .padding(horizontal = 16.dp, vertical = 12.dp)
+        .semantics { contentDescription = "Detected language toast" },
     horizontalArrangement = Arrangement.SpaceBetween,
     verticalAlignment = Alignment.CenterVertically,
   ) {
     Column(
       modifier = Modifier.weight(1f),
     ) {
-      val isLanguageAvailable = availableLanguages[detectedLanguage.code] == true
-
       Text(
         text = if (isLanguageAvailable) "Translate from" else "Missing language",
         fontSize = 12.sp,
@@ -81,10 +85,6 @@ fun DetectedLanguageToast(
       )
     }
 
-    val isLanguageAvailable = availableLanguages[detectedLanguage.code] == true
-
-    val context = LocalContext.current
-
     if (isLanguageAvailable) {
       Icon(
         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -99,8 +99,8 @@ fun DetectedLanguageToast(
       LanguageDownloadButton(
         language = detectedLanguage,
         downloadState = downloadStates[detectedLanguage],
-        context = context,
-        isLanguageAvailable = isLanguageAvailable,
+        isLanguageAvailable = availableLanguages[detectedLanguage]!!.translatorFiles,
+        onEvent = onEvent,
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
       )
     }
@@ -113,8 +113,9 @@ fun DetectedLanguageToastPreview() {
   TranslatorTheme {
     DetectedLanguageToast(
       detectedLanguage = Language.SPANISH,
-      availableLanguages = mapOf(Language.SPANISH.code to true),
+      availableLanguages = mapOf(Language.SPANISH to LangAvailability(true, true, true)),
       onSwitchClick = {},
+      onEvent = {},
       downloadStates = emptyMap(),
     )
   }
@@ -129,8 +130,9 @@ fun DetectedLanguageToastDarkPreview() {
   TranslatorTheme {
     DetectedLanguageToast(
       detectedLanguage = Language.FRENCH,
-      availableLanguages = mapOf(Language.FRENCH.code to true),
+      availableLanguages = mapOf(Language.FRENCH to LangAvailability(true, true, true)),
       onSwitchClick = {},
+      onEvent = {},
       downloadStates = emptyMap(),
     )
   }
@@ -145,8 +147,9 @@ fun MissingLanguage() {
   TranslatorTheme {
     DetectedLanguageToast(
       detectedLanguage = Language.SPANISH,
-      availableLanguages = mapOf(Language.FRENCH.code to false),
+      availableLanguages = mapOf(Language.FRENCH to LangAvailability(false, true, true)),
       onSwitchClick = {},
+      onEvent = {},
       downloadStates = emptyMap(),
     )
   }

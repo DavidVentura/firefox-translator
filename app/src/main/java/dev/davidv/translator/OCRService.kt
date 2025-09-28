@@ -18,12 +18,7 @@
 package dev.davidv.translator
 
 import android.graphics.Bitmap
-import android.graphics.Rect
 import android.util.Log
-import com.googlecode.tesseract.android.TessBaseAPI
-import com.googlecode.tesseract.android.TessBaseAPI.PageIteratorLevel.RIL_PARA
-import com.googlecode.tesseract.android.TessBaseAPI.PageIteratorLevel.RIL_TEXTLINE
-import com.googlecode.tesseract.android.TessBaseAPI.PageIteratorLevel.RIL_WORD
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.io.path.Path
@@ -32,6 +27,35 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.pathString
 import kotlin.math.min
 import kotlin.system.measureTimeMillis
+
+data class Rect(
+  var left: Int,
+  var top: Int,
+  var right: Int,
+  var bottom: Int,
+) {
+  constructor(other: Rect) : this(other.left, other.top, other.right, other.bottom)
+
+  fun width(): Int = right - left
+
+  fun height(): Int = bottom - top
+
+  fun isEmpty(): Boolean = left >= right || top >= bottom
+
+  fun union(other: Rect) {
+    if (isEmpty()) {
+      left = other.left
+      top = other.top
+      right = other.right
+      bottom = other.bottom
+    } else {
+      if (other.left < left) left = other.left
+      if (other.top < top) top = other.top
+      if (other.right > right) right = other.right
+      if (other.bottom > bottom) bottom = other.bottom
+    }
+  }
+}
 
 data class TextLine(
   var text: String,
@@ -47,53 +71,116 @@ data class WordInfo(
   val text: String,
   val confidence: Float,
   val boundingBox: Rect,
+  // when concatenating words (undoing line-breaks)
+  // the boundingBox must remain within the original boundary
+  // however, the actual size of the word will be bigger
+  val ghostBBox: Rect? = null,
   val isFirstInLine: Boolean,
   var isLastInLine: Boolean,
   var isLastInPara: Boolean,
 )
 
-fun getSentences(
-  bitmap: Bitmap,
-  tessInstance: TessBaseAPI,
-  minConfidence: Int = 75,
-): Array<TextBlock> {
-  tessInstance.setImage(bitmap)
-  tessInstance.setPageSegMode(TessBaseAPI.PageSegMode.PSM_AUTO_OSD)
+fun mergeHyphenatedWords(words: List<WordInfo>): List<WordInfo> {
+  if (words.isEmpty()) return words
 
-  // calling utf8text is required to create iterator
-  tessInstance.utF8Text
+  val result = mutableListOf<WordInfo>()
+  var i = 0
 
-  val iter = tessInstance.resultIterator
-  if (iter == null) {
-    Log.e("OCRService", "Got Null iterator from Tesseract")
-    return emptyArray()
-  }
+  while (i < words.size) {
+    val currentWord = words[i]
 
-  iter.begin()
-  val allWords = mutableListOf<WordInfo>()
-  do {
-    val word = iter.getUTF8Text(RIL_WORD)
-    if (word == null) {
-      Log.e("OCRService", "WTF word was null")
+    // can't merge with next if we are at the last word
+    if (i == words.size - 1) {
+      result.add(currentWord)
+      break
+    }
+
+    if (!currentWord.isLastInLine || !currentWord.text.endsWith("-")) {
+      result.add(currentWord)
+      i++
       continue
     }
 
-    allWords.add(
+    val nextWord = words[i + 1]
+    // sometimes tesseract does not detect firstInLine properly
+    // we only hack around it if the previous word as hyphenated, as it's unlikely
+    // to cause much damage in normal usage.
+    val poorMansFirstInLine =
+      nextWord.boundingBox.left < currentWord.boundingBox.left && nextWord.boundingBox.top > currentWord.boundingBox.top
+    if (!nextWord.isFirstInLine && !poorMansFirstInLine) {
+      result.add(currentWord)
+      i++
+      continue
+    }
+
+    val mergedText = currentWord.text.dropLast(1) + nextWord.text
+    val ghostBBox = Rect(currentWord.boundingBox)
+    ghostBBox.right += nextWord.boundingBox.width()
+    val mergedWord =
       WordInfo(
-        text = word,
-        confidence = iter.confidence(RIL_WORD),
-        boundingBox = iter.getBoundingRect(RIL_WORD),
-        isFirstInLine = iter.isAtBeginningOf(RIL_TEXTLINE),
-        isLastInLine = iter.isAtFinalElement(RIL_TEXTLINE, RIL_WORD),
-        isLastInPara = iter.isAtFinalElement(RIL_PARA, RIL_WORD),
-      ),
-    )
-  } while (iter.next(RIL_WORD))
+        text = mergedText,
+        confidence = minOf(currentWord.confidence, nextWord.confidence),
+        // we only take as much space
+        // as available until the end of the next line.
+        // the NEXT word, should start where the second half of the word
+        // was. Text will be reflown in the block, but lines must
+        // continue to span their entire width
+        boundingBox = currentWord.boundingBox,
+        isFirstInLine = currentWord.isFirstInLine,
+        isLastInLine = true,
+        isLastInPara = nextWord.isLastInPara,
+        ghostBBox = ghostBBox,
+      )
+    result.add(mergedWord)
 
-  iter.delete()
-  tessInstance.clear()
+    if (i + 2 >= words.size) {
+      i += 2
+      continue
+    }
 
-  val filteredWords = mutableListOf<WordInfo>()
+    // Expand the next word to take over the space from the second part of the hyphenated word
+    val nextWordAfterMerged = words[i + 2]
+    val newRect = Rect(nextWord.boundingBox)
+    newRect.union(nextWordAfterMerged.boundingBox)
+    val expandedWord =
+      nextWordAfterMerged.copy(
+        boundingBox = newRect,
+        isFirstInLine = true,
+      )
+    result.add(expandedWord)
+    i += 3
+  }
+
+  return result
+}
+
+fun getSentences(
+  bitmap: Bitmap,
+  tessInstance: TesseractOCR,
+  minConfidence: Int = 75,
+): Array<TextBlock> {
+  tessInstance.setPageSegmentationMode(PageSegMode.PSM_AUTO_OSD)
+
+  val detectedWords = tessInstance.processImage(bitmap)
+  if (detectedWords == null) {
+    Log.e("OCRService", "Failed to process image with Tesseract")
+    return emptyArray()
+  }
+
+  val allWords =
+    detectedWords
+      .map { detectedWord ->
+        WordInfo(
+          text = detectedWord.text,
+          confidence = detectedWord.confidence,
+          boundingBox = Rect(detectedWord.left, detectedWord.top, detectedWord.right, detectedWord.bottom),
+          isFirstInLine = detectedWord.isAtBeginningOfPara,
+          isLastInLine = detectedWord.endLine,
+          isLastInPara = detectedWord.endPara,
+        )
+      }.toMutableList()
+
+  var filteredWords = mutableListOf<WordInfo>()
   var pendingFirstInLine = false
 
   for (i in allWords.indices) {
@@ -128,6 +215,10 @@ fun getSentences(
     }
   }
 
+  // FIXME: this is technically wrong -- if we skip a word (pendingFirstInLine)
+  // we shouldn't merge hyphenations
+  filteredWords = mergeHyphenatedWords(filteredWords).toMutableList()
+
   val blocks = mutableListOf<TextBlock>()
   val lines = mutableListOf<TextLine>()
   var line = TextLine("", Rect(0, 0, 0, 0), emptyArray())
@@ -139,6 +230,7 @@ fun getSentences(
       continue
     }
     val boundingBox = wordInfo.boundingBox
+    val realBBox = wordInfo.ghostBBox ?: wordInfo.boundingBox
     val skippedFirstWord = boundingBox.right < line.boundingBox.left
     val firstWordInLine = wordInfo.isFirstInLine || skippedFirstWord
     val lastWordInLine = wordInfo.isLastInLine
@@ -148,7 +240,7 @@ fun getSentences(
       line = TextLine(word, boundingBox, arrayOf(boundingBox))
     } else {
       val delta = boundingBox.left - lastRight
-      val charWidth = boundingBox.width().toFloat() / word.length
+      val charWidth = realBBox.width().toFloat() / word.length
       val deltaInChars: Float = if (charWidth > 0) delta.toFloat() / charWidth else 0f
 
       // In the same line but too far apart, make a new block
@@ -163,7 +255,7 @@ fun getSentences(
           lines.clear()
         }
       } else {
-        line.text = "${line.text} $word"
+        line.text = "${line.text} $word".trim()
         line.wordRects += boundingBox
         if (boundingBox.right < line.boundingBox.left) {
           Log.e("OCRService", "going to break $boundingBox ${line.boundingBox}")
@@ -181,7 +273,8 @@ fun getSentences(
     }
 
     if (lastWordInPara && lines.isNotEmpty()) {
-      blocks.add(TextBlock(lines.toTypedArray()))
+      val block = TextBlock(lines.toTypedArray())
+      blocks.add(block)
       lines.clear()
     }
     lastRight = boundingBox.right
@@ -193,7 +286,7 @@ fun getSentences(
 class OCRService(
   private val filePathManager: FilePathManager,
 ) {
-  private var tess: TessBaseAPI? = null
+  private var tess: TesseractOCR? = null
   private var isInitialized = false
 
   private suspend fun initialize(): Boolean =
@@ -213,15 +306,14 @@ class OCRService(
           return@withContext false
         }
 
-        tess = TessBaseAPI()
-
         val langs = availableLanguages.joinToString("+")
         Log.i("OCRService", "Initializing tesseract to path $dataPath, languages $langs")
-        val initialized = tess?.init(dataPath, langs) ?: false
+
+        tess = TesseractOCR(tessdata.absolutePathString(), langs)
+        val initialized = tess?.initialize() ?: false
         if (!initialized) {
-          tess?.recycle()
+          tess?.close()
           tess = null
-          // TODO popup
           Log.e(
             "OCRService",
             "Failed to initialize Tesseract with languages: $availableLanguages",
@@ -264,7 +356,7 @@ class OCRService(
     }
 
   fun cleanup() {
-    tess?.recycle()
+    tess?.close()
     tess = null
     isInitialized = false
     Log.i("OCRService", "OCR service cleaned up")

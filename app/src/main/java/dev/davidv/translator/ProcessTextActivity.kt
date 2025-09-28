@@ -27,6 +27,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.lifecycleScope
 import dev.davidv.translator.ui.screens.TranslatorApp
 import dev.davidv.translator.ui.theme.TranslatorTheme
@@ -68,12 +69,13 @@ class ProcessTextActivity : ComponentActivity() {
         TranslatorTheme {
           TranslatorApp(
             initialText = textToTranslate,
-            sharedImageUri = null,
+            sharedImageUri = mutableStateOf(null),
             translationCoordinator = translationCoordinator,
             settingsManager = settingsManager,
             filePathManager = filePathManager,
             downloadServiceState = downloadServiceState,
-            launchMode = launchMode,
+            initialLaunchMode = launchMode,
+            onClose = { finish() },
           )
         }
       }

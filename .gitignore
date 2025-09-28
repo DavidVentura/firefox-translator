@@ -8,6 +8,7 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .idea/deploymentTargetSelector.xml
+.idea/androidTestResultsUserPreferences.xml
 .DS_Store
 /build
 /captures
@@ -18,3 +19,4 @@ app/bergamot/out/
 app/aarch64
 app/x86
 app/release
+app/src/main/jniLibs/

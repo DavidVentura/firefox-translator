@@ -1,0 +1,22 @@
+- Fixes a bug that would make the application get stuck on startup
+- Fixes support for the Translate button on other applications
+- Implements dictionary support for all languages except Croatian
+- Makes translation more responsive
+
+The model version is updated, adding support for Icelandic and improving the quality for:
+
+- Bulgarian
+- Catalan
+- Chinese
+- Czech
+- Dutch
+- Estonian
+- Finnish
+- French
+- German
+- Italian
+- Japanese
+- Portuguese
+- Spanish
+
+You will need to delete & re-download the files to benefit from the new models.

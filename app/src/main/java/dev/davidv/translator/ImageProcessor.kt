@@ -45,11 +45,10 @@ class ImageProcessor(
       )
     }
 
-  fun loadBitmapFromUri(uri: Uri): Bitmap {
-    return context.contentResolver.openInputStream(uri)?.use { inputStream ->
+  fun loadBitmapFromUri(uri: Uri): Bitmap =
+    context.contentResolver.openInputStream(uri)?.use { inputStream ->
       BitmapFactory.decodeStream(inputStream)
     } ?: throw IllegalArgumentException("Cannot load bitmap from URI: $uri")
-  }
 
   fun downscaleImage(
     bitmap: Bitmap,

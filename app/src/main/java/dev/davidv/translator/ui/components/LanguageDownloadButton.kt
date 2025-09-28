@@ -16,8 +16,6 @@
  */
 
 package dev.davidv.translator.ui.components
-
-import android.content.Context
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
@@ -35,11 +33,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import dev.davidv.translator.DownloadService
 import dev.davidv.translator.DownloadState
 import dev.davidv.translator.Language
 import dev.davidv.translator.R
@@ -49,12 +45,11 @@ import dev.davidv.translator.ui.theme.TranslatorTheme
 fun LanguageDownloadButton(
   language: Language,
   downloadState: DownloadState?,
-  context: Context,
   isLanguageAvailable: Boolean,
+  onEvent: (LanguageEvent) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val isDownloading = downloadState?.isDownloading == true
-  val isCompleted = downloadState?.isCompleted == true
 
   if (isDownloading) {
     // Progress indicator with cancel button
@@ -76,7 +71,7 @@ fun LanguageDownloadButton(
       )
       IconButton(
         onClick = {
-          DownloadService.cancelDownload(context, language)
+          onEvent(LanguageEvent.Cancel(language))
         },
         modifier = Modifier.size(40.dp),
       ) {
@@ -86,11 +81,11 @@ fun LanguageDownloadButton(
         )
       }
     }
-  } else if (isLanguageAvailable || isCompleted) {
+  } else if (isLanguageAvailable) {
     // Delete button for available/completed languages
     IconButton(
       onClick = {
-        DownloadService.deleteLanguage(context, language)
+        onEvent(LanguageEvent.Delete(language))
       },
       modifier = modifier,
     ) {
@@ -103,7 +98,7 @@ fun LanguageDownloadButton(
     // Download/retry button
     IconButton(
       onClick = {
-        DownloadService.startDownload(context, language)
+        onEvent(LanguageEvent.Download(language))
       },
       enabled = true,
       modifier = modifier,
@@ -126,6 +121,26 @@ fun LanguageDownloadButton(
   }
 }
 
+sealed class LanguageEvent {
+  data class Download(
+    val language: Language,
+  ) : LanguageEvent()
+
+  data class Delete(
+    val language: Language,
+  ) : LanguageEvent()
+
+  data class DeleteDictionary(
+    val language: Language,
+  ) : LanguageEvent()
+
+  data class Cancel(
+    val language: Language,
+  ) : LanguageEvent()
+
+  object FetchDictionaryIndex : LanguageEvent()
+}
+
 @Preview(showBackground = true)
 @Composable
 fun LanguageDownloadButtonPreview() {
@@ -139,32 +154,42 @@ fun LanguageDownloadButtonPreview() {
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
       ) {
+        // DL
         LanguageDownloadButton(
           language = Language.FRENCH,
           downloadState = null,
-          context = LocalContext.current,
           isLanguageAvailable = false,
+          onEvent = {},
         )
 
+        // Prog
         LanguageDownloadButton(
           language = Language.FRENCH,
           downloadState = DownloadState(isDownloading = true, totalSize = 100, downloaded = 50),
-          context = LocalContext.current,
           isLanguageAvailable = false,
+          onEvent = {},
         )
 
+        // Complete
         LanguageDownloadButton(
           language = Language.FRENCH,
           downloadState = null,
-          context = LocalContext.current,
           isLanguageAvailable = true,
+          onEvent = {},
         )
-
+        // Failed
         LanguageDownloadButton(
           language = Language.FRENCH,
           downloadState = DownloadState(error = "Failed"),
-          context = LocalContext.current,
           isLanguageAvailable = false,
+          onEvent = {},
+        )
+        // Missing partial
+        LanguageDownloadButton(
+          language = Language.FRENCH,
+          downloadState = null,
+          isLanguageAvailable = true,
+          onEvent = {},
         )
       }
     }

@@ -40,13 +40,17 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.davidv.translator.AppSettings
+import dev.davidv.translator.DownloadEvent
 import dev.davidv.translator.DownloadService
 import dev.davidv.translator.FilePathManager
-import dev.davidv.translator.LanguageManagerScreen
+import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.R
-import dev.davidv.translator.SettingsManager
+import dev.davidv.translator.fromEnglishFiles
 import dev.davidv.translator.ui.theme.TranslatorTheme
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,9 +58,10 @@ fun NoLanguagesScreen(
   onDone: () -> Unit,
   onSettings: () -> Unit,
   languageStateManager: LanguageStateManager,
-  downloadService: DownloadService?,
+  downloadService: DownloadService,
 ) {
   val state by languageStateManager.languageState.collectAsState()
+  val context = LocalContext.current
 
   Scaffold(
     topBar = {
@@ -101,10 +106,27 @@ fun NoLanguagesScreen(
         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
       )
 
-      LanguageManagerScreen(
-        embedded = true,
-        languageState = languageStateManager.languageState,
-        downloadStates_ = downloadService?.downloadStates,
+      val downloadStates by downloadService.downloadStates.collectAsState()
+      val availLangs = state.availableLanguageMap.filterValues { it.translatorFiles }.keys
+      val installedLanguages = availLangs.filter { it != Language.ENGLISH }.sortedBy { it.displayName }
+      val availableLanguages =
+        Language.entries
+          .filter { lang ->
+            fromEnglishFiles[lang] != null && !availLangs.contains(lang) && lang != Language.ENGLISH
+          }.sortedBy { it.displayName }
+
+      val dictionaryDownloadStates by downloadService.dictionaryDownloadStates.collectAsState()
+      val dictionaryIndex by languageStateManager.dictionaryIndex.collectAsState()
+
+      TabbedLanguageManagerScreen(
+        context = context,
+        languageStateManager = languageStateManager,
+        installedLanguages = installedLanguages,
+        availableLanguages = availableLanguages,
+        languageAvailabilityState = state,
+        downloadStates = downloadStates,
+        dictionaryDownloadStates = dictionaryDownloadStates,
+        dictionaryIndex = dictionaryIndex,
       )
     }
   }
@@ -115,14 +137,16 @@ fun NoLanguagesScreen(
 fun NoLanguagesScreenPreview() {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
-  val settingsManager = SettingsManager(context)
-  val filePathManager = FilePathManager(context, settingsManager.settings)
+  val appSettingsFlow = MutableStateFlow(AppSettings())
+  val fp = FilePathManager(context, appSettingsFlow)
+  val mockDownloadEvents = MutableSharedFlow<DownloadEvent>()
+  val downloadService = DownloadService()
   TranslatorTheme {
     NoLanguagesScreen(
       onDone = {},
       onSettings = {},
-      languageStateManager = LanguageStateManager(scope, filePathManager, DownloadService()),
-      downloadService = DownloadService(),
+      downloadService = downloadService,
+      languageStateManager = LanguageStateManager(scope, fp, mockDownloadEvents),
     )
   }
 }

@@ -19,7 +19,6 @@ package dev.davidv.translator
 
 import android.util.Log
 import dev.davidv.bergamot.LangDetect
-import dev.davidv.translator.FilePathManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -48,7 +47,7 @@ class LanguageDetector {
   suspend fun detectLanguageRobust(
     text: String,
     hint: Language?,
-    filePathManager: FilePathManager,
+    availableLanguages: List<Language>,
   ): Language? =
     withContext(Dispatchers.IO) {
       Log.d(TAG, "detectLanguageRobust: ${hint ?: "null"} | $text")
@@ -57,8 +56,7 @@ class LanguageDetector {
         return@withContext initialDetection
       }
 
-      val downloadedLanguages = getDownloadedLanguages(filePathManager.getDataDir())
-      for (lang in downloadedLanguages) {
+      for (lang in availableLanguages) {
         if (lang == hint) continue // Already tried
         Log.d(TAG, "trying ${lang.code}")
         val detected = langDetect.detectLanguage(text, lang.code)

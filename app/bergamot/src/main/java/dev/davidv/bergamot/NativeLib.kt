@@ -25,16 +25,21 @@ class NativeLib {
     initializeService()
   }
 
-  external fun stringFromJNI(
-    cfg: String,
-    data: String,
-    key: String,
-  ): String
-
   external fun loadModelIntoCache(
     cfg: String,
     key: String,
   )
+
+  external fun translateMultiple(
+    inputs: Array<String>,
+    key: String,
+  ): Array<String>
+
+  external fun pivotMultiple(
+    firstKey: String,
+    secondKey: String,
+    inputs: Array<String>,
+  ): Array<String>
 
   private external fun initializeService()
 
@@ -44,8 +49,6 @@ class NativeLib {
     // Used to load the 'bergamot' library on application startup.
     init {
       Log.d("NativeLib", "Loading bergamot library")
-
-//            Debug.waitForDebugger()
       System.loadLibrary("bergamot-sys")
     }
   }

@@ -17,8 +17,12 @@
 
 package dev.davidv.translator.ui.screens
 
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -44,7 +48,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,20 +59,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import dev.davidv.translator.AppSettings
+import dev.davidv.translator.DownloadService
 import dev.davidv.translator.DownloadState
+import dev.davidv.translator.LangAvailability
 import dev.davidv.translator.Language
 import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslatorMessage
+import dev.davidv.translator.WordWithTaggedEntries
 import dev.davidv.translator.ui.components.DetectedLanguageSection
+import dev.davidv.translator.ui.components.DictionaryBottomSheet
 import dev.davidv.translator.ui.components.ImageCaptureHandler
 import dev.davidv.translator.ui.components.ImageDisplaySection
+import dev.davidv.translator.ui.components.LanguageEvent
 import dev.davidv.translator.ui.components.LanguageSelectionRow
 import dev.davidv.translator.ui.components.StyledTextField
 import dev.davidv.translator.ui.components.TranslationField
@@ -92,20 +102,29 @@ fun MainScreen(
   displayImage: Bitmap?,
   isTranslating: StateFlow<Boolean>,
   isOcrInProgress: StateFlow<Boolean>,
-  launchMode: LaunchMode,
+  dictionaryWord: WordWithTaggedEntries?,
+  dictionaryStack: List<WordWithTaggedEntries>,
+  dictionaryLookupLanguage: Language?,
   // Action requests
   onMessage: (TranslatorMessage) -> Unit,
   // System integration
-  availableLanguages: Map<String, Boolean>,
+  availableLanguages: Map<Language, LangAvailability>,
   downloadStates: Map<Language, DownloadState> = emptyMap(),
   settings: AppSettings,
+  launchMode: LaunchMode,
 ) {
   var showFullScreenImage by remember { mutableStateOf(false) }
   var showImageSourceSheet by remember { mutableStateOf(false) }
-  val translating by isTranslating.collectAsState()
   val extraTopPadding = if (launchMode == LaunchMode.Normal) 0.dp else 8.dp
+  val context = LocalContext.current
+
+  // Handle back button when dictionary is open
+  BackHandler(enabled = dictionaryWord != null) {
+    onMessage(TranslatorMessage.ClearDictionaryStack)
+  }
 
   Scaffold(
+    modifier = Modifier.semantics { contentDescription = "Main screen" },
     floatingActionButton = {
       when (launchMode) {
         LaunchMode.Normal -> {
@@ -130,12 +149,13 @@ fun MainScreen(
               onClick = {
                 launchMode.reply(output.translated)
               },
-              shape = FloatingActionButtonDefaults.largeShape,
+              shape = FloatingActionButtonDefaults.smallShape,
+              modifier = Modifier.size(30.dp),
             ) {
               Icon(
                 painterResource(id = R.drawable.check),
                 contentDescription = "Replace text",
-                modifier = Modifier.size(30.dp),
+                modifier = Modifier.size(20.dp),
               )
             }
           }
@@ -160,10 +180,23 @@ fun MainScreen(
         LanguageSelectionRow(
           from = from,
           to = to,
-          availableLanguages = availableLanguages,
-          translating = translating,
+          availableLanguages = availableLanguages.mapValues { it.value.translatorFiles },
           onMessage = onMessage,
-          onSettings = if (launchMode == LaunchMode.Normal) onSettings else null,
+          drawable =
+            if (launchMode == LaunchMode.Normal) {
+              Pair("Settings", R.drawable.settings)
+            } else {
+              Pair(
+                "Expand",
+                R.drawable.open_in_full,
+              )
+            },
+          onSettings =
+            if (launchMode == LaunchMode.Normal) {
+              onSettings
+            } else {
+              { onMessage(TranslatorMessage.ChangeLaunchMode(LaunchMode.Normal)) }
+            },
         )
 
         BoxWithConstraints(
@@ -215,6 +248,9 @@ fun MainScreen(
                   onValueChange = { newInput ->
                     onMessage(TranslatorMessage.TextInput(newInput))
                   },
+                  onDictionaryLookup = { word ->
+                    onMessage(TranslatorMessage.DictionaryLookup(word, from))
+                  },
                   placeholder = if (displayImage == null) "Enter text" else null,
                   modifier =
                     Modifier
@@ -226,8 +262,12 @@ fun MainScreen(
                       lineHeight = (MaterialTheme.typography.bodyLarge.lineHeight * settings.fontFactor),
                     ),
                 )
-                if (displayImage == null && input.isNotEmpty()) {
-                  ClearInput(onMessage)
+                if (displayImage == null) {
+                  if (input.isNotEmpty()) {
+                    ClearInput(onMessage)
+                  } else {
+                    PasteButton(onMessage)
+                  }
                 }
               }
             }
@@ -238,6 +278,13 @@ fun MainScreen(
               availableLanguages = availableLanguages,
               onMessage = onMessage,
               downloadStates = downloadStates,
+              onEvent = { event ->
+                when (event) {
+                  is LanguageEvent.Download -> DownloadService.startDownload(context, event.language)
+                  is LanguageEvent.Cancel -> DownloadService.cancelDownload(context, event.language)
+                  else -> Log.e("MainScreen", "Got unexpected event: $event")
+                }
+              },
             )
 
             Box(
@@ -260,16 +307,17 @@ fun MainScreen(
                   .fillMaxWidth()
                   .height(parentHeight * 0.5f),
             ) {
-              if (output != null) {
-                TranslationField(
-                  text = output,
-                  textStyle =
-                    MaterialTheme.typography.bodyLarge.copy(
-                      fontSize = (MaterialTheme.typography.bodyLarge.fontSize * settings.fontFactor),
-                      lineHeight = (MaterialTheme.typography.bodyLarge.lineHeight * settings.fontFactor),
-                    ),
-                )
-              }
+              TranslationField(
+                text = output,
+                textStyle =
+                  MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = (MaterialTheme.typography.bodyLarge.fontSize * settings.fontFactor),
+                    lineHeight = (MaterialTheme.typography.bodyLarge.lineHeight * settings.fontFactor),
+                  ),
+                onDictionaryLookup = {
+                  onMessage(TranslatorMessage.DictionaryLookup(it, to))
+                },
+              )
             }
           }
         }
@@ -291,6 +339,25 @@ fun MainScreen(
       onDismiss = { showFullScreenImage = false },
     )
   }
+
+  // Dictionary bottom sheet
+  if (dictionaryWord != null) {
+    DictionaryBottomSheet(
+      dictionaryWord = dictionaryWord!!,
+      dictionaryStack = dictionaryStack,
+      // DictionaryLookupLanguage should always be set if dictionaryWord if set
+      dictionaryLookupLanguage = dictionaryLookupLanguage ?: Language.ENGLISH,
+      onDismiss = {
+        onMessage(TranslatorMessage.ClearDictionaryStack)
+      },
+      onDictionaryLookup = { word ->
+        onMessage(TranslatorMessage.DictionaryLookup(word, dictionaryLookupLanguage ?: Language.ENGLISH))
+      },
+      onBackPressed = {
+        onMessage(TranslatorMessage.PopDictionary)
+      },
+    )
+  }
 }
 
 @Composable
@@ -305,6 +372,32 @@ fun BoxScope.ClearInput(onMessage: (TranslatorMessage) -> Unit) {
     Icon(
       painterResource(id = R.drawable.cancel),
       contentDescription = "Clear input",
+      tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+    )
+  }
+}
+
+@Composable
+fun BoxScope.PasteButton(onMessage: (TranslatorMessage) -> Unit) {
+  val context = LocalContext.current
+
+  IconButton(
+    onClick = {
+      val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+      val clipData = clipboardManager.primaryClip
+      if (clipData != null && clipData.itemCount > 0) {
+        val text = clipData.getItemAt(0).text?.toString() ?: ""
+        onMessage(TranslatorMessage.TextInput(text))
+      }
+    },
+    modifier =
+      Modifier
+        .align(Alignment.TopEnd)
+        .size(32.dp),
+  ) {
+    Icon(
+      painterResource(id = R.drawable.paste),
+      contentDescription = "Paste",
       tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
     )
   }
@@ -352,16 +445,19 @@ fun PopupMode() {
       displayImage = null,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
+      launchMode = LaunchMode.ReadWriteModal {},
       onMessage = {},
       availableLanguages =
         mapOf(
-          Language.ENGLISH.code to true,
-          Language.SPANISH.code to true,
-          Language.FRENCH.code to true,
+          Language.ENGLISH to LangAvailability(true, true, true),
+          Language.SPANISH to LangAvailability(true, true, true),
+          Language.FRENCH to LangAvailability(true, true, true),
         ),
       downloadStates = emptyMap(),
       settings = AppSettings(),
-      launchMode = LaunchMode.ReadWriteModal {},
+      dictionaryWord = null,
+      dictionaryStack = emptyList(),
+      dictionaryLookupLanguage = null,
     )
   }
 }
@@ -383,16 +479,19 @@ fun MainScreenPreview() {
       displayImage = null,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
+      launchMode = LaunchMode.Normal,
       onMessage = {},
       availableLanguages =
         mapOf(
-          Language.ENGLISH.code to true,
-          Language.SPANISH.code to true,
-          Language.FRENCH.code to true,
+          Language.ENGLISH to LangAvailability(true, true, true),
+          Language.SPANISH to LangAvailability(true, true, true),
+          Language.FRENCH to LangAvailability(true, true, true),
         ),
       downloadStates = emptyMap(),
       settings = AppSettings(),
-      launchMode = LaunchMode.Normal,
+      dictionaryWord = null,
+      dictionaryStack = emptyList(),
+      dictionaryLookupLanguage = null,
     )
   }
 }
@@ -419,16 +518,19 @@ fun PreviewVeryLongText() {
       displayImage = null,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
+      launchMode = LaunchMode.Normal,
       onMessage = {},
       availableLanguages =
         mapOf(
-          Language.ENGLISH.code to true,
-          Language.SPANISH.code to true,
-          Language.FRENCH.code to true,
+          Language.ENGLISH to LangAvailability(true, true, true),
+          Language.SPANISH to LangAvailability(true, true, true),
+          Language.FRENCH to LangAvailability(true, true, true),
         ),
       downloadStates = emptyMap(),
       settings = AppSettings(),
-      launchMode = LaunchMode.Normal,
+      dictionaryWord = null,
+      dictionaryStack = emptyList(),
+      dictionaryLookupLanguage = null,
     )
   }
 }
@@ -459,16 +561,19 @@ fun PreviewVeryLongTextImage() {
       displayImage = bitmap,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
+      launchMode = LaunchMode.Normal,
       onMessage = {},
       availableLanguages =
         mapOf(
-          Language.ENGLISH.code to true,
-          Language.SPANISH.code to true,
-          Language.FRENCH.code to true,
+          Language.ENGLISH to LangAvailability(true, true, true),
+          Language.SPANISH to LangAvailability(true, true, true),
+          Language.FRENCH to LangAvailability(true, true, true),
         ),
       downloadStates = emptyMap(),
       settings = AppSettings(),
-      launchMode = LaunchMode.Normal,
+      dictionaryWord = null,
+      dictionaryStack = emptyList(),
+      dictionaryLookupLanguage = null,
     )
   }
 }

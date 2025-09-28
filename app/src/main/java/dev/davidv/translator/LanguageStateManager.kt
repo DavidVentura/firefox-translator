@@ -20,43 +20,86 @@ package dev.davidv.translator
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// TODO: remove either the list or the map
+data class LangAvailability(
+  val translatorFiles: Boolean,
+  val ocrFiles: Boolean,
+  val dictionaryFiles: Boolean,
+)
+
 data class LanguageAvailabilityState(
   val hasLanguages: Boolean = false,
-  val availableLanguages: List<Language> = emptyList(),
-  val availableLanguageMap: Map<String, Boolean> = emptyMap(),
+  val availableLanguageMap: Map<Language, LangAvailability> = emptyMap(),
   val isChecking: Boolean = true,
 )
+
+fun isDictionaryAvailable(
+  filePathManager: FilePathManager,
+  language: Language,
+): Boolean = filePathManager.getDictionaryFile(language).exists()
+
+fun isDictionaryAvailable(
+  dictFiles: Set<String>,
+  language: Language,
+): Boolean = "${language.code}.dict" in dictFiles
 
 class LanguageStateManager(
   private val scope: CoroutineScope,
   private val filePathManager: FilePathManager,
-  private val downloadService: DownloadService,
+  downloadEvents: SharedFlow<DownloadEvent>? = null,
 ) {
   private val _languageState = MutableStateFlow(LanguageAvailabilityState())
   val languageState: StateFlow<LanguageAvailabilityState> = _languageState.asStateFlow()
 
-  init {
-    scope.launch {
-      downloadService.downloadEvents.collect { event ->
-        when (event) {
-          is DownloadEvent.NewLanguageAvailable -> {
-            addLanguage(event.language)
-          }
+  private val _dictionaryIndex = MutableStateFlow<DictionaryIndex?>(null)
+  val dictionaryIndex: StateFlow<DictionaryIndex?> = _dictionaryIndex.asStateFlow()
 
-          is DownloadEvent.LanguageDeleted -> {
-            deleteLanguage(event.language)
+  private val _fileEvents = MutableSharedFlow<FileEvent>()
+  val fileEvents: SharedFlow<FileEvent> = _fileEvents.asSharedFlow()
+
+  private var downloadEventsJob: kotlinx.coroutines.Job? = null
+
+  init {
+    if (downloadEvents != null) {
+      connectToDownloadEvents(downloadEvents)
+    }
+    refreshLanguageAvailability()
+    loadDictionaryIndex()
+  }
+
+  fun connectToDownloadEvents(downloadEvents: SharedFlow<DownloadEvent>) {
+    downloadEventsJob?.cancel()
+    downloadEventsJob =
+      scope.launch {
+        downloadEvents.collect { event ->
+          when (event) {
+            is DownloadEvent.NewTranslationAvailable -> {
+              addTranslationLanguage(event.language)
+            }
+
+            is DownloadEvent.NewDictionaryAvailable -> {
+              addDictionaryLanguage(event.language)
+            }
+
+            is DownloadEvent.DictionaryIndexDownloaded -> {
+              _dictionaryIndex.value = event.index
+              Log.i("LanguageStateManager", "Dictionary index downloaded: ${event.index}")
+            }
+
+            is DownloadEvent.DownloadError -> {
+              Log.w("LanguageStateManager", "Download error: ${event.message}")
+            }
           }
         }
       }
-    }
-    refreshLanguageAvailability()
   }
 
   fun refreshLanguageAvailability() {
@@ -66,86 +109,173 @@ class LanguageStateManager(
       Log.i("LanguageStateManager", "Refreshing language availability")
       val availabilityMap =
         withContext(Dispatchers.IO) {
+          Log.d("LanguageStateManager", "listing")
+          val dataFiles =
+            filePathManager
+              .getDataDir()
+              .listFiles()
+              ?.map { it.name }
+              ?.toSet() ?: emptySet()
+          val tessFiles =
+            filePathManager
+              .getTesseractDataDir()
+              .listFiles()
+              ?.map { it.name }
+              ?.toSet() ?: emptySet()
+          val dictFiles =
+            filePathManager
+              .getDictionariesDir()
+              .listFiles()
+              ?.map { it.name }
+              ?.toSet() ?: emptySet()
+          Log.d("LanguageStateManager", "listed")
+
           buildMap {
-            // English is always available
-            put(Language.ENGLISH.code, true)
+            put(
+              Language.ENGLISH,
+              LangAvailability(
+                translatorFiles = true,
+                ocrFiles = true,
+                dictionaryFiles = isDictionaryAvailable(dictFiles, Language.ENGLISH),
+              ),
+            )
 
             Language.entries.forEach { fromLang ->
               val toLang = Language.ENGLISH
               if (fromLang != toLang) {
-                val dataPath = filePathManager.getDataDir()
-                val isAvailable = missingFiles(dataPath, fromLang).second.isEmpty()
-                put(fromLang.code, isAvailable)
+                val isTranslatorAvailable = missingFiles(dataFiles, fromLang).second.isEmpty()
+                val isOcrAvailable = "${fromLang.tessName}.traineddata" in tessFiles
+                put(
+                  fromLang,
+                  LangAvailability(
+                    translatorFiles = isTranslatorAvailable,
+                    ocrFiles = isOcrAvailable,
+                    dictionaryFiles = isDictionaryAvailable(dictFiles, fromLang),
+                  ),
+                )
               }
             }
+            Log.d("LanguageStateManager", "mapped")
           }
         }
 
-      val availableLanguages =
-        Language.entries.filter { language ->
-          availabilityMap[language.code] == true
-        }
-
-      val hasLanguages = availableLanguages.any { it != Language.ENGLISH }
+      val hasLanguages = availabilityMap.any { it.key != Language.ENGLISH && it.value.translatorFiles }
       Log.i("LanguageStateManager", "hasLanguages = $hasLanguages")
       _languageState.value =
         LanguageAvailabilityState(
           hasLanguages = hasLanguages,
-          availableLanguages = availableLanguages,
           availableLanguageMap = availabilityMap,
           isChecking = false,
         )
     }
   }
 
-  private fun addLanguage(language: Language) {
+  private fun addTranslationLanguage(language: Language) {
     val currentState = _languageState.value
     val updatedLanguageMap = currentState.availableLanguageMap.toMutableMap()
-    updatedLanguageMap[language.code] = true
+    val isDictAvail = isDictionaryAvailable(filePathManager, language)
+    updatedLanguageMap[language] = LangAvailability(true, true, isDictAvail)
 
-    val updatedAvailableLanguages =
-      Language.entries.filter { lang ->
-        updatedLanguageMap[lang.code] == true
-      }
-
-    val hasLanguages = updatedAvailableLanguages.any { it != Language.ENGLISH }
+    // Only english doesn't count, so if it's non-english
+    // or we already had languages, then we still have them
+    val hasLanguages = _languageState.value.hasLanguages || language != Language.ENGLISH
 
     _languageState.value =
       currentState.copy(
         hasLanguages = hasLanguages,
-        availableLanguages = updatedAvailableLanguages,
         availableLanguageMap = updatedLanguageMap,
       )
 
-    Log.i("LanguageStateManager", "Added language: ${language.displayName}")
+    Log.i("LanguageStateManager", "Added translation language: ${language.displayName}")
   }
 
-  private fun deleteLanguage(language: Language) {
+  private fun addDictionaryLanguage(language: Language) {
     val currentState = _languageState.value
     val updatedLanguageMap = currentState.availableLanguageMap.toMutableMap()
-    updatedLanguageMap[language.code] = false
+    val existingAvailability = updatedLanguageMap[language]
+    updatedLanguageMap[language] =
+      LangAvailability(
+        translatorFiles = existingAvailability?.translatorFiles ?: false,
+        ocrFiles = existingAvailability?.ocrFiles ?: false,
+        dictionaryFiles = true,
+      )
 
-    val updatedAvailableLanguages =
-      Language.entries.filter { lang ->
-        updatedLanguageMap[lang.code] == true
-      }
+    _languageState.value =
+      currentState.copy(
+        availableLanguageMap = updatedLanguageMap,
+      )
 
-    val hasLanguages = updatedAvailableLanguages.any { it != Language.ENGLISH }
+    Log.i("LanguageStateManager", "Added dict language: ${language.displayName}")
+  }
+
+  fun deleteDict(language: Language) {
+    val currentState = _languageState.value
+    val updatedLanguageMap = currentState.availableLanguageMap.toMutableMap()
+    val existingAvailability = updatedLanguageMap[language]
+    updatedLanguageMap[language] =
+      LangAvailability(
+        translatorFiles = existingAvailability?.translatorFiles ?: false,
+        ocrFiles = existingAvailability?.ocrFiles ?: false,
+        dictionaryFiles = false,
+      )
+
+    _languageState.value =
+      currentState.copy(
+        availableLanguageMap = updatedLanguageMap,
+      )
+
+    val dictionaryFile = filePathManager.getDictionaryFile(language)
+    if (dictionaryFile.exists() && dictionaryFile.delete()) {
+      Log.i("LanguageStateManager", "Deleted dictionary file: ${dictionaryFile.name}")
+    }
+
+    scope.launch {
+      _fileEvents.emit(FileEvent.DictionaryDeleted(language))
+    }
+
+    Log.i("LanguageStateManager", "Removed dictionary for language: ${language.displayName}")
+  }
+
+  fun deleteLanguage(language: Language) {
+    val currentState = _languageState.value
+    val updatedLanguageMap = currentState.availableLanguageMap.toMutableMap()
+    updatedLanguageMap[language] = LangAvailability(translatorFiles = false, ocrFiles = false, dictionaryFiles = false)
+
+    val hasLanguages = updatedLanguageMap.any { it.key != Language.ENGLISH && it.value.translatorFiles }
 
     _languageState.value =
       currentState.copy(
         hasLanguages = hasLanguages,
-        availableLanguages = updatedAvailableLanguages,
         availableLanguageMap = updatedLanguageMap,
       )
 
+    filePathManager.deleteLanguageFiles(language)
+    scope.launch {
+      _fileEvents.emit(FileEvent.LanguageDeleted(language))
+    }
     Log.i("LanguageStateManager", "Removed language: ${language.displayName}")
   }
 
   fun getFirstAvailableFromLanguage(excluding: Language? = null): Language? {
     val state = _languageState.value
-    return state.availableLanguages
-      .filterNot { it == excluding }
+    return state.availableLanguageMap
+      .filterNot { it.key == excluding }
+      .filter { it.value.translatorFiles }
+      .keys
       .firstOrNull()
+  }
+
+  private fun loadDictionaryIndex() {
+    scope.launch {
+      val index =
+        withContext(Dispatchers.IO) {
+          filePathManager.loadDictionaryIndexFromFile()
+        }
+      _dictionaryIndex.value = index
+      if (index != null) {
+        _fileEvents.emit(FileEvent.DictionaryIndexLoaded(index))
+      }
+      Log.i("LanguageStateManager", "Dictionary index loaded from file: ${index != null}")
+    }
   }
 }

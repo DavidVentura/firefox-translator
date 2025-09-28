@@ -9,7 +9,7 @@ plugins {
 android {
   namespace = "dev.davidv.translator"
   compileSdk = 34
-  ndkVersion = "27.0.12077973"
+  ndkVersion = "28.0.12674087"
   buildToolsVersion = "34.0.0"
 
   sourceSets {
@@ -26,8 +26,8 @@ android {
     applicationId = "dev.davidv.translator"
     minSdk = 28 // iconv functions need 28?
     targetSdk = 34
-    versionCode = 4
-    versionName = "0.1.2"
+    versionCode = 6
+    versionName = "0.2.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -36,7 +36,17 @@ android {
     release {
       isMinifyEnabled = true
       isShrinkResources = true
-
+      // when building in F-Droid CI, the `cargo` binary is not in path
+      // so there's a prebuild step to modify this file and replace "cargo"
+      // with the full path to cargo (/home/vagrant/.cargo/bin/..)
+      // however, modifying this file leaves the repo in a dirty state
+      // which means that the revision in `META-INF/version-control-info.textproto`
+      // does not match with the _actual_ commit.
+      // Disabling this until I figure out how to put `cargo` in PATH
+      // in F-Droid CI
+      vcsInfo {
+        include = false
+      }
       proguardFiles(
         getDefaultProguardFile("proguard-android-optimize.txt"),
         "proguard-rules.pro",
@@ -78,6 +88,76 @@ android {
   }
 }
 
+val bindingsRootDir = "src/main/bindings"
+val jniLibsDir = "../jniLibs"
+val ndk = "${System.getenv("ANDROID_SDK_ROOT")}/ndk/28.0.12674087"
+tasks.register("buildBindingsX86_64") {
+  group = "build"
+  description = "Build Rust bindings library for x86_64"
+
+  doLast {
+    exec {
+      workingDir = file(bindingsRootDir)
+      environment("ANDROID_NDK_ROOT", ndk)
+      environment("ANDROID_NDK_HOME", ndk)
+      commandLine(
+        "cargo",
+        "ndk",
+        "build",
+        "--target",
+        "x86_64",
+        "--release",
+        "--platform",
+        "28",
+        "--link-libcxx-shared",
+        "--output-dir",
+        "../jniLibs",
+      )
+    }
+  }
+}
+
+tasks.register("buildBindingsAarch64") {
+  group = "build"
+  description = "Build Rust bindings library for aarch64"
+
+  doLast {
+    exec {
+      workingDir = file(bindingsRootDir)
+      environment("ANDROID_NDK_ROOT", ndk)
+      environment("ANDROID_NDK_HOME", ndk)
+      commandLine(
+        "cargo",
+        "ndk",
+        "build",
+        "--target",
+        "arm64-v8a",
+        "--release",
+        "--platform",
+        "28",
+        "--link-libcxx-shared",
+        "--output-dir",
+        "../jniLibs",
+      )
+    }
+  }
+}
+
+tasks.register("buildBindingsAll") {
+  group = "build"
+  description = "Build Rust bindings library for all architectures"
+  dependsOn("buildBindingsX86_64", "buildBindingsAarch64")
+}
+
+tasks.whenTaskAdded {
+  if (name.contains("preAarch64") && name.contains("Build")) {
+    dependsOn("buildBindingsAarch64")
+  }
+  if (name.contains("preX86_64") && name.contains("Build")) {
+    dependsOn("buildBindingsX86_64")
+  }
+}
+
 dependencies {
 
   implementation(libs.androidx.core.ktx)
@@ -90,6 +170,7 @@ dependencies {
   implementation(libs.androidx.material3)
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.exifinterface)
+  implementation(libs.androidx.uiautomator)
   testImplementation(libs.junit)
   androidTestImplementation(libs.androidx.junit)
   androidTestImplementation(libs.androidx.espresso.core)
@@ -101,7 +182,7 @@ dependencies {
   implementation(libs.kotlinx.coroutines.core)
   implementation(project(":app:bergamot"))
   // OpenMP - Multi-threaded. Provides better performance on multi-core processors when using only single instance of Tesseract.
-  implementation(("cz.adaptech.tesseract4android:tesseract4android-openmp:4.9.0"))
+//  implementation(("cz.adaptech.tesseract4android:tesseract4android-openmp:4.9.0"))
 }
 
 ktlint {

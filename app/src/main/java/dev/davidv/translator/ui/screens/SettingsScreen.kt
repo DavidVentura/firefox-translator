@@ -37,7 +37,6 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -64,6 +63,56 @@ import dev.davidv.translator.PermissionHelper
 import dev.davidv.translator.R
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.delay
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LanguageDropdown(
+  label: String,
+  selectedLanguage: Language?,
+  availableLanguages: List<Language>,
+  fallbackLanguage: Language?,
+  onLanguageSelected: (Language) -> Unit,
+) {
+  var expanded by remember { mutableStateOf(false) }
+
+  Text(
+    text = label,
+    style = MaterialTheme.typography.bodyMedium,
+    color = MaterialTheme.colorScheme.onSurface,
+  )
+
+  ExposedDropdownMenuBox(
+    expanded = expanded,
+    onExpandedChange = { expanded = it },
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    OutlinedTextField(
+      value = selectedLanguage?.displayName ?: fallbackLanguage?.displayName ?: "No languages available",
+      onValueChange = {},
+      readOnly = true,
+      trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+      modifier =
+        Modifier
+          .menuAnchor()
+          .fillMaxWidth(),
+      colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+    )
+    ExposedDropdownMenu(
+      expanded = expanded,
+      onDismissRequest = { expanded = false },
+    ) {
+      availableLanguages.forEach { language ->
+        DropdownMenuItem(
+          text = { Text(language.displayName) },
+          onClick = {
+            onLanguageSelected(language)
+            expanded = false
+          },
+        )
+      }
+    }
+  }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,7 +170,7 @@ fun SettingsScreen(
       ) {
         Column(
           modifier = Modifier.padding(16.dp),
-          verticalArrangement = Arrangement.spacedBy(12.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
           Text(
             text = "Languages",
@@ -141,10 +190,10 @@ fun SettingsScreen(
               color = MaterialTheme.colorScheme.onSurface,
             )
 
-            OutlinedButton(
+            TextButton(
               onClick = onManageLanguages,
             ) {
-              Text("Manage Languages")
+              Text("Manage")
             }
           }
         }
@@ -168,46 +217,25 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.primary,
           )
 
-          // Default Target Language
-          var languageExpanded by remember { mutableStateOf(false) }
-
-          Text(
-            text = "Default Target Language",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+          LanguageDropdown(
+            label = "Default 'from' language",
+            selectedLanguage = settings.defaultSourceLanguage,
+            availableLanguages = availableLanguages,
+            fallbackLanguage = availableLanguages.firstOrNull { it != settings.defaultTargetLanguage },
+            onLanguageSelected = { language ->
+              onSettingsChange(settings.copy(defaultSourceLanguage = language))
+            },
           )
 
-          ExposedDropdownMenuBox(
-            expanded = languageExpanded,
-            onExpandedChange = { languageExpanded = it },
-            modifier = Modifier.fillMaxWidth(),
-          ) {
-            OutlinedTextField(
-              value = settings.defaultTargetLanguage.displayName,
-              onValueChange = {},
-              readOnly = true,
-              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = languageExpanded) },
-              modifier =
-                Modifier
-                  .menuAnchor()
-                  .fillMaxWidth(),
-              colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-            )
-            ExposedDropdownMenu(
-              expanded = languageExpanded,
-              onDismissRequest = { languageExpanded = false },
-            ) {
-              availableLanguages.forEach { language ->
-                DropdownMenuItem(
-                  text = { Text(language.displayName) },
-                  onClick = {
-                    onSettingsChange(settings.copy(defaultTargetLanguage = language))
-                    languageExpanded = false
-                  },
-                )
-              }
-            }
-          }
+          LanguageDropdown(
+            label = "Default 'to' language",
+            selectedLanguage = settings.defaultTargetLanguage,
+            availableLanguages = availableLanguages,
+            fallbackLanguage = null,
+            onLanguageSelected = { language ->
+              onSettingsChange(settings.copy(defaultTargetLanguage = language))
+            },
+          )
 
           Text(
             text = "Font Size",
@@ -419,6 +447,81 @@ fun SettingsScreen(
               singleLine = true,
             )
 
+            // Dictionary Base URL
+            Text(
+              text = "Base URL for Dictionaries",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            OutlinedTextField(
+              value = settings.dictionaryBaseUrl,
+              onValueChange = {
+                onSettingsChange(settings.copy(dictionaryBaseUrl = it))
+              },
+              modifier = Modifier.fillMaxWidth(),
+              singleLine = true,
+            )
+
+            // External Storage Toggle
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Text(
+                text = "Use external storage",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+
+              Switch(
+                checked = settings.useExternalStorage,
+                onCheckedChange = { checked ->
+                  if (checked) {
+                    if (PermissionHelper.hasExternalStoragePermission(context)) {
+                      onSettingsChange(settings.copy(useExternalStorage = true))
+                    } else if (PermissionHelper.needsSpecialPermissionIntent()) {
+                      // Android 11+ - Show dialog first, then launch Settings
+                      showPermissionDialog = true
+                    } else {
+                      // Android 10 and below - Request runtime permissions
+                      val permissions = PermissionHelper.getExternalStoragePermissions()
+                      if (permissions.isNotEmpty()) {
+                        permissionLauncher.launch(permissions)
+                      } else {
+                        onSettingsChange(settings.copy(useExternalStorage = true))
+                      }
+                    }
+                  } else {
+                    onSettingsChange(settings.copy(useExternalStorage = false))
+                  }
+                },
+              )
+            }
+
+            // Show OCR Detection Toggle
+            if (!settings.disableOcr) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Text(
+                  text = "Show OCR detection",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+
+                Switch(
+                  checked = settings.showOCRDetection,
+                  onCheckedChange = { checked ->
+                    onSettingsChange(settings.copy(showOCRDetection = checked))
+                  },
+                )
+              }
+            }
+
             // Disable OCR Toggle
             Row(
               modifier = Modifier.fillMaxWidth(),
@@ -475,63 +578,6 @@ fun SettingsScreen(
                 checked = settings.disableTransliteration,
                 onCheckedChange = { checked ->
                   onSettingsChange(settings.copy(disableTransliteration = checked))
-                },
-              )
-            }
-
-            // External Storage Toggle
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Text(
-                text = "Use external storage",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-              )
-
-              Switch(
-                checked = settings.useExternalStorage,
-                onCheckedChange = { checked ->
-                  if (checked) {
-                    if (PermissionHelper.hasExternalStoragePermission(context)) {
-                      onSettingsChange(settings.copy(useExternalStorage = true))
-                    } else if (PermissionHelper.needsSpecialPermissionIntent()) {
-                      // Android 11+ - Show dialog first, then launch Settings
-                      showPermissionDialog = true
-                    } else {
-                      // Android 10 and below - Request runtime permissions
-                      val permissions = PermissionHelper.getExternalStoragePermissions()
-                      if (permissions.isNotEmpty()) {
-                        permissionLauncher.launch(permissions)
-                      } else {
-                        onSettingsChange(settings.copy(useExternalStorage = true))
-                      }
-                    }
-                  } else {
-                    onSettingsChange(settings.copy(useExternalStorage = false))
-                  }
-                },
-              )
-            }
-
-            // Show OCR Detection Toggle
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Text(
-                text = "Show OCR detection",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-              )
-
-              Switch(
-                checked = settings.showOCRDetection,
-                onCheckedChange = { checked ->
-                  onSettingsChange(settings.copy(showOCRDetection = checked))
                 },
               )
             }

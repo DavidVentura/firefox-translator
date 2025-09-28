@@ -66,14 +66,58 @@ object TransliterationService {
     }
 
     val rule = getTransliterationRule(language.script, targetScript) ?: return null
-
+    Log.d("Transliteration", "Using rule $rule")
+    val transliterator = getTransliterator(rule) ?: return null
     return try {
-      val transliterator = getTransliterator(rule)
-      transliterator?.transliterate(text)
+      if (language == Language.JAPANESE) {
+        transliterateJapanese(text, transliterator)
+      } else {
+        transliterator.transliterate(text)
+      }
     } catch (e: Exception) {
       Log.w("TransliterationService", "Failed to transliterate text for $language", e)
       null
     }
+  }
+
+  @RequiresApi(Build.VERSION_CODES.Q)
+  private fun transliterateJapanese(
+    text: String,
+    transliterator: Transliterator,
+  ): String {
+    val result = StringBuilder()
+    var i = 0
+
+    while (i < text.length) {
+      val char = text[i]
+
+      if (isKanji(char)) {
+        result.append(char)
+        i++
+      } else {
+        val segmentStart = i
+        while (i < text.length && !isKanji(text[i])) {
+          i++
+        }
+        val segment = text.substring(segmentStart, i)
+        val transliterated = transliterator.transliterate(segment)
+        result.append(transliterated)
+      }
+    }
+
+    return result.toString()
+  }
+
+  private fun isKanji(char: Char): Boolean {
+    val codePoint = char.code
+    return (codePoint in 0x4E00..0x9FAF) ||
+      (codePoint in 0x3400..0x4DBF) ||
+      (codePoint in 0x20000..0x2A6DF) ||
+      (codePoint in 0x2A700..0x2B73F) ||
+      (codePoint in 0x2B740..0x2B81F) ||
+      (codePoint in 0x2B820..0x2CEAF) ||
+      (codePoint in 0xF900..0xFAFF) ||
+      (codePoint in 0x2F800..0x2FA1F)
   }
 
   @RequiresApi(Build.VERSION_CODES.Q)
