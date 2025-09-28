@@ -56,38 +56,39 @@ class AidlTranslationService : Service() {
         CoroutineScope(Dispatchers.IO).launch {
           langStateManager.languageState.first { !it.isChecking }
           val langs =
-            langStateManager.languageState.value.availableLanguageMap.keys
+            langStateManager.languageState.value.availableLanguageMap
+              .filterValues { it.translatorFiles }
+              .keys
               .toList()
           while (translationCoordinator.isTranslating.value) {
             delay(100)
           }
           val from = fromLanguage ?: translationCoordinator.detectLanguageRobust(textToTranslate, null, langs)
-          if (from != null) {
-            val to = toLanguage ?: SettingsManager(applicationContext).settings.value.defaultTargetLanguage
-            val result = translationCoordinator.translateText(from, to, textToTranslate)
-            when (result) {
-              is TranslationResult.Success -> {
-                val translatedText = result.result.translated
-                Log.d(TAG, "translated text: $translatedText")
-                callback.onTranslationResult(translatedText)
-              }
-
-              is TranslationResult.Error -> {
-                val errorMessage = "Error: " + result.message
-                Log.d(TAG, errorMessage)
-                callback.onTranslationError(errorMessage)
-              }
-
-              null -> {
-                val errorMessage = "Error: Translation failed"
-                Log.d(TAG, errorMessage)
-                callback.onTranslationError(errorMessage)
-              }
-            }
-          } else {
+          Log.d(TAG, "Detected lang $from")
+          if (from == null) {
             val errorMessage = "Error: Could not detect language"
             Log.d(TAG, errorMessage)
             callback.onTranslationError(errorMessage)
+            return@launch
+          }
+          if (!langs.contains(from)) {
+            val errorMessage = "Error: Detected language ${from.displayName} not available"
+            Log.d(TAG, errorMessage)
+            callback.onTranslationError(errorMessage)
+          }
+          val to = toLanguage ?: SettingsManager(applicationContext).settings.value.defaultTargetLanguage
+          when (val result = translationCoordinator.translateText(from, to, textToTranslate)) {
+            is TranslationResult.Success -> {
+              val translatedText = result.result.translated
+              Log.d(TAG, "translated text: $translatedText")
+              callback.onTranslationResult(translatedText)
+            }
+
+            is TranslationResult.Error -> {
+              val errorMessage = "Error: " + result.message
+              Log.d(TAG, errorMessage)
+              callback.onTranslationError(errorMessage)
+            }
           }
         }
       }

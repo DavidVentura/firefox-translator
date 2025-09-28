@@ -59,7 +59,7 @@ class TranslationCoordinator(
     from: Language,
     to: Language,
     text: String,
-  ): TranslationResult? {
+  ): TranslationResult {
     if (text.isBlank()) return TranslationResult.Success(TranslatedText("", ""))
     // we do best-effort in TranslatorApp to not call this concurrently,
     // to avoid pointless queueing (only the latest result is useful)
@@ -88,7 +88,7 @@ class TranslationCoordinator(
               Toast.LENGTH_SHORT,
             ).show()
         }
-        null
+        result
       }
     }
   }

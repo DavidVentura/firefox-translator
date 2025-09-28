@@ -61,13 +61,24 @@ class BackgroundTranslationService : Service() {
     CoroutineScope(Dispatchers.IO).launch {
       langStateManager.languageState.first { !it.isChecking }
       val langs =
-        langStateManager.languageState.value.availableLanguageMap.keys
+        langStateManager.languageState.value.availableLanguageMap
+          .filterValues { it.translatorFiles }
+          .keys
           .toList()
+      val bundle = Bundle()
       val from = fromLanguage ?: translationCoordinator.detectLanguageRobust(textToTranslate, null, langs)
       if (from == null) {
-        val bundle = Bundle()
         bundle.putString("translated_text", "Error: Could not detect language")
         Log.d(TAG, "Error: Could not detect language")
+        val msg = Message.obtain()
+        msg.data = bundle
+        receiver.send(msg)
+        stopSelf()
+        return@launch
+      }
+      if (!langs.contains(from)) {
+        bundle.putString("translated_text", "Error: detected ${from.displayName} not available")
+        Log.d(TAG, "Error: detected $from not available")
         val msg = Message.obtain()
         msg.data = bundle
         receiver.send(msg)
@@ -88,7 +99,6 @@ class BackgroundTranslationService : Service() {
           else -> "error"
         }
       Log.d(TAG, "$bundleKey: $translatedText")
-      val bundle = Bundle()
       bundle.putString(bundleKey, translatedText)
       val msg = Message.obtain()
       msg.data = bundle
