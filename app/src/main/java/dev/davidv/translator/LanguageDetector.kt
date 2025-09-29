@@ -23,7 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class LanguageDetector {
-  private val TAG = this.javaClass.name.substringAfterLast('.')
+  private val tag = this.javaClass.name.substringAfterLast('.')
 
   private val langDetect = LangDetect()
 
@@ -50,7 +50,7 @@ class LanguageDetector {
     availableLanguages: List<Language>,
   ): Language? =
     withContext(Dispatchers.IO) {
-      Log.d(TAG, "detectLanguageRobust: ${hint ?: "null"} | $text")
+      Log.d(tag, "detectLanguageRobust: ${hint ?: "null"} | $text")
       val initialDetection = detectLanguage(text, hint)
       if (initialDetection != null) {
         return@withContext initialDetection
@@ -58,7 +58,7 @@ class LanguageDetector {
 
       for (lang in availableLanguages) {
         if (lang == hint) continue // Already tried
-        Log.d(TAG, "trying ${lang.code}")
+        Log.d(tag, "trying ${lang.code}")
         val detected = langDetect.detectLanguage(text, lang.code)
         if (detected.isReliable) {
           val detectedLang = Language.entries.firstOrNull { it.code == detected.language }
@@ -68,7 +68,7 @@ class LanguageDetector {
         }
       }
 
-      Log.w(TAG, "no reliable detection")
+      Log.w(tag, "no reliable detection")
       return@withContext null
     }
 }

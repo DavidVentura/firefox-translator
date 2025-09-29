@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class AidlTranslationService : Service() {
-  private val TAG = this.javaClass.name.substringAfterLast('.')
+  private val tag = this.javaClass.name.substringAfterLast('.')
 
   private lateinit var translationCoordinator: TranslationCoordinator
   private lateinit var langStateManager: LanguageStateManager
@@ -27,11 +27,11 @@ class AidlTranslationService : Service() {
     val imageProcessor = ImageProcessor(this, OCRService(filePathManager))
     translationCoordinator = TranslationCoordinator(this, translationService, languageDetector, imageProcessor, settingsManager, false)
     langStateManager = LanguageStateManager(serviceScope, filePathManager, null)
-    Log.d(TAG, "onCreate")
+    Log.d(tag, "onCreate")
   }
 
   override fun onBind(intent: Intent?): IBinder {
-    Log.d(TAG, "onBind")
+    Log.d(tag, "onBind")
     return binder
   }
 
@@ -43,10 +43,10 @@ class AidlTranslationService : Service() {
         toLanguageStr: String?,
         callback: ITranslationCallback?,
       ) {
-        Log.d(TAG, "txt len:${textToTranslate?.length ?: -1}, from:$fromLanguageStr, to:$toLanguageStr, cb = ${callback != null}")
+        Log.d(tag, "txt len:${textToTranslate?.length ?: -1}, from:$fromLanguageStr, to:$toLanguageStr, cb = ${callback != null}")
 
         if (textToTranslate == null || callback == null) {
-          Log.w(TAG, "translate: textToTranslate or callback is null")
+          Log.w(tag, "translate: textToTranslate or callback is null")
           return
         }
 
@@ -64,30 +64,28 @@ class AidlTranslationService : Service() {
             delay(100)
           }
           val from = fromLanguage ?: translationCoordinator.detectLanguageRobust(textToTranslate, null, langs)
-          Log.d(TAG, "Detected lang $from")
+          Log.d(tag, "Detected lang $from")
           if (from == null) {
-            val errorMessage = "Error: Could not detect language"
-            Log.d(TAG, errorMessage)
-            callback.onTranslationError(errorMessage)
+            Log.d(tag, "Could not detect language")
+            callback.onTranslationError(TranslationError.couldNotDetectLanguage())
             return@launch
           }
           if (!langs.contains(from)) {
-            val errorMessage = "Error: Detected language ${from.displayName} not available"
-            Log.d(TAG, errorMessage)
-            callback.onTranslationError(errorMessage)
+            Log.d(tag, "Detected language ${from.displayName} not available")
+            callback.onTranslationError(TranslationError.detectedButUnavailable(from.displayName))
+            return@launch
           }
           val to = toLanguage ?: SettingsManager(applicationContext).settings.value.defaultTargetLanguage
           when (val result = translationCoordinator.translateText(from, to, textToTranslate)) {
             is TranslationResult.Success -> {
               val translatedText = result.result.translated
-              Log.d(TAG, "translated text: $translatedText")
+              Log.d(tag, "translated text: $translatedText")
               callback.onTranslationResult(translatedText)
             }
 
             is TranslationResult.Error -> {
-              val errorMessage = "Error: " + result.message
-              Log.d(TAG, errorMessage)
-              callback.onTranslationError(errorMessage)
+              Log.d(tag, "Translation error: ${result.message}")
+              callback.onTranslationError(TranslationError.unexpected(result.message))
             }
           }
         }
@@ -99,17 +97,17 @@ class AidlTranslationService : Service() {
     flags: Int,
     startId: Int,
   ): Int {
-    Log.d(TAG, "onStartCommand received, but this service is meant to be bound.")
+    Log.d(tag, "onStartCommand received, but this service is meant to be bound.")
     return START_NOT_STICKY
   }
 
   override fun onUnbind(intent: Intent?): Boolean {
-    Log.d(TAG, "onUnbind")
+    Log.d(tag, "onUnbind")
     return super.onUnbind(intent)
   }
 
   override fun onDestroy() {
-    Log.d(TAG, "onDestroy")
+    Log.d(tag, "onDestroy")
     super.onDestroy()
   }
 }
