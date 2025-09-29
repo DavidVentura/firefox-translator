@@ -91,18 +91,6 @@
             android:exported="false" />
 
         <service
-            android:name=".BackgroundTranslationService"
-            android:enabled="true"
-            android:exported="true"
-            android:foregroundServiceType="specialUse"
-            tools:ignore="ExportedService">
-            <intent-filter>
-                <action android:name="dev.davidv.translator.action.TRANSLATE_TEXT" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </service>
-
-        <service
             android:name=".AidlTranslationService"
             android:exported="true">
             <intent-filter>
