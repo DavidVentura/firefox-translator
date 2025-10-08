@@ -56,6 +56,7 @@ import kotlin.math.roundToInt
 fun ZoomableImageViewer(
   bitmap: Bitmap,
   onDismiss: () -> Unit,
+  onShare: () -> Unit,
 ) {
   Dialog(
     onDismissRequest = onDismiss,
@@ -138,6 +139,21 @@ fun ZoomableImageViewer(
             )
             .transformable(state = state),
       )
+
+      // Share button
+      IconButton(
+        onClick = onShare,
+        modifier =
+          Modifier
+            .align(Alignment.TopStart)
+            .size(48.dp),
+      ) {
+        Icon(
+          painterResource(id = R.drawable.check),
+          contentDescription = "Share image",
+          tint = Color.White,
+        )
+      }
 
       // Close button
       IconButton(

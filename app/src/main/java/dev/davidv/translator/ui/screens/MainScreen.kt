@@ -19,8 +19,10 @@ package dev.davidv.translator.ui.screens
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.net.Uri
 import android.util.Log
 import android.widget.TextView
 import androidx.activity.compose.BackHandler
@@ -67,6 +69,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.startActivity
+import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
 import dev.davidv.translator.AppSettings
 import dev.davidv.translator.DownloadService
@@ -92,6 +96,53 @@ import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+
+/**
+ * Saves the image as PNG to the app's cache directory.
+ * @param image Bitmap to save.
+ * @return Uri of the saved file or null
+ */
+fun saveImage(
+  image: Bitmap, context: Context,
+): Uri? {
+  // TODO - Should be processed in another thread
+  val imagesFolder: File =
+    File(
+      context.cacheDir,
+      "images",
+    )
+  var uri: Uri? = null
+  try {
+    imagesFolder.mkdirs()
+    val file = File(imagesFolder, "shared_image.png")
+
+    //val stream = FileOutputStream(file)
+    //file.compress(Bitmap.CompressFormat.PNG, 90, stream)
+    //stream.flush()
+    //stream.close()
+    uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+  } catch (e: IOException) {
+    Log.e("Share", "IOException while trying to write file for sharing: " + e.message)
+  }
+  return uri;
+}
+
+/**
+ * Shares the PNG image from Uri.
+ * @param uri Uri of image to share.
+ */
+fun ShareImageUri(uri: Uri, context: Context) {
+  val intent = Intent(android.content.Intent.ACTION_SEND)
+  intent.putExtra(Intent.EXTRA_STREAM, uri)
+  intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+  intent.setType("image/png")
+  //val context = LocalContext.current
+
+  startActivity(context, intent, null)
+}
 
 @Composable
 fun MainScreen(
@@ -382,6 +433,12 @@ fun MainScreen(
     ZoomableImageViewer(
       bitmap = displayImage,
       onDismiss = { showFullScreenImage = false },
+      onShare = {
+        val imageUri = saveImage(displayImage, context)
+        if (imageUri != null) {
+          ShareImageUri(imageUri, context)
+        }
+      },
     )
   }
 
