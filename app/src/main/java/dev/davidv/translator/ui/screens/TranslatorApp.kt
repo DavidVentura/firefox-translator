@@ -75,9 +75,11 @@ import dev.davidv.translator.TranslationResult
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.WordWithTaggedEntries
 import dev.davidv.translator.fromEnglishFiles
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -118,30 +120,31 @@ fun shareImageUri(
   startActivity(context, intent, null)
 }
 
-fun saveImage(
+suspend fun saveImage(
   image: Bitmap,
   context: Context,
-): Uri? {
-  val imagesFolder: File =
-    File(
-      context.cacheDir,
-      "images",
-    )
-  var uri: Uri? = null
-  try {
-    imagesFolder.mkdirs()
-    val file = File(imagesFolder, "shared_image.png")
+): Uri? =
+  withContext(Dispatchers.IO) {
+    val imagesFolder: File =
+      File(
+        context.cacheDir,
+        "images",
+      )
+    var uri: Uri? = null
+    try {
+      imagesFolder.mkdirs()
+      val file = File(imagesFolder, "shared_image.png")
 
-    val stream = FileOutputStream(file)
-    image.compress(Bitmap.CompressFormat.PNG, 90, stream)
-    stream.flush()
-    stream.close()
-    uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-  } catch (e: IOException) {
-    Log.e("Share", "IOException while trying to write file for sharing: " + e.message)
+      val stream = FileOutputStream(file)
+      image.compress(Bitmap.CompressFormat.PNG, 90, stream)
+      stream.flush()
+      stream.close()
+      uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    } catch (e: IOException) {
+      Log.e("Share", "IOException while trying to write file for sharing: " + e.message)
+    }
+    uri
   }
-  return uri
-}
 
 @Composable
 fun TranslatorApp(
