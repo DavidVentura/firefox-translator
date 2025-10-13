@@ -97,6 +97,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 
 /**
@@ -119,10 +120,10 @@ fun saveImage(
     imagesFolder.mkdirs()
     val file = File(imagesFolder, "shared_image.png")
 
-    // val stream = FileOutputStream(file)
-    // file.compress(Bitmap.CompressFormat.PNG, 90, stream)
-    // stream.flush()
-    // stream.close()
+    val stream = FileOutputStream(file)
+    image.compress(Bitmap.CompressFormat.PNG, 90, stream)
+    stream.flush()
+    stream.close()
     uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
   } catch (e: IOException) {
     Log.e("Share", "IOException while trying to write file for sharing: " + e.message)
