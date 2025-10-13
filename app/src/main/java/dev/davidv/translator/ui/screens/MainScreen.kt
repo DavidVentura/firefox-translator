@@ -97,7 +97,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 
 /**
@@ -106,7 +105,8 @@ import java.io.IOException
  * @return Uri of the saved file or null
  */
 fun saveImage(
-  image: Bitmap, context: Context,
+  image: Bitmap,
+  context: Context,
 ): Uri? {
   // TODO - Should be processed in another thread
   val imagesFolder: File =
@@ -119,27 +119,30 @@ fun saveImage(
     imagesFolder.mkdirs()
     val file = File(imagesFolder, "shared_image.png")
 
-    //val stream = FileOutputStream(file)
-    //file.compress(Bitmap.CompressFormat.PNG, 90, stream)
-    //stream.flush()
-    //stream.close()
+    // val stream = FileOutputStream(file)
+    // file.compress(Bitmap.CompressFormat.PNG, 90, stream)
+    // stream.flush()
+    // stream.close()
     uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
   } catch (e: IOException) {
     Log.e("Share", "IOException while trying to write file for sharing: " + e.message)
   }
-  return uri;
+  return uri
 }
 
 /**
  * Shares the PNG image from Uri.
  * @param uri Uri of image to share.
  */
-fun ShareImageUri(uri: Uri, context: Context) {
+fun ShareImageUri(
+  uri: Uri,
+  context: Context,
+) {
   val intent = Intent(android.content.Intent.ACTION_SEND)
   intent.putExtra(Intent.EXTRA_STREAM, uri)
   intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
   intent.setType("image/png")
-  //val context = LocalContext.current
+  // val context = LocalContext.current
 
   startActivity(context, intent, null)
 }

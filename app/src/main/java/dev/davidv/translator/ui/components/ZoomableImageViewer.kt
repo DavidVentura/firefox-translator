@@ -136,8 +136,7 @@ fun ZoomableImageViewer(
             .graphicsLayer(
               scaleX = scale,
               scaleY = scale,
-            )
-            .transformable(state = state),
+            ).transformable(state = state),
       )
 
       // Share button
@@ -149,7 +148,7 @@ fun ZoomableImageViewer(
             .size(48.dp),
       ) {
         Icon(
-          painterResource(id = R.drawable.check),
+          painterResource(id = R.drawable.share),
           contentDescription = "Share image",
           tint = Color.White,
         )
