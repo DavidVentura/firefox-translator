@@ -36,6 +36,8 @@ sealed class TranslatorMessage {
     val uri: Uri,
   ) : TranslatorMessage()
 
+  data object ShareTranslatedImage : TranslatorMessage()
+
   data object SwapLanguages : TranslatorMessage()
 
   data object ClearInput : TranslatorMessage()

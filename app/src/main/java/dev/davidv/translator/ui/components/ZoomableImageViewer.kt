@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -144,28 +145,28 @@ fun ZoomableImageViewer(
         onClick = onShare,
         modifier =
           Modifier
-            .align(Alignment.TopStart)
+            .align(Alignment.TopEnd)
             .size(48.dp),
       ) {
         Icon(
           painterResource(id = R.drawable.share),
           contentDescription = "Share image",
-          tint = Color.White,
+          tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
         )
       }
 
-      // Close button
+      // Back button
       IconButton(
         onClick = onDismiss,
         modifier =
           Modifier
-            .align(Alignment.TopEnd)
+            .align(Alignment.TopStart)
             .size(48.dp),
       ) {
         Icon(
-          painterResource(id = R.drawable.cancel),
+          painterResource(id = R.drawable.arrow_back),
           contentDescription = "Close full screen view",
-          tint = Color.White,
+          tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
         )
       }
     }

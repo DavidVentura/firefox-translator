@@ -17,6 +17,8 @@
 
 package dev.davidv.translator.ui.screens
 
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
@@ -52,6 +54,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat.startActivity
+import androidx.core.content.FileProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -74,6 +78,9 @@ import dev.davidv.translator.fromEnglishFiles
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 
 fun toggleFirstLetterCase(word: String): String {
   if (word.isEmpty()) return word
@@ -97,6 +104,43 @@ fun openDictionary(
   } else {
     onError("Failed to load dictionary for ${language.displayName}")
   }
+}
+
+fun shareImageUri(
+  uri: Uri,
+  context: Context,
+) {
+  val intent = Intent(Intent.ACTION_SEND)
+  intent.putExtra(Intent.EXTRA_STREAM, uri)
+  intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+  intent.setType("image/png")
+
+  startActivity(context, intent, null)
+}
+
+fun saveImage(
+  image: Bitmap,
+  context: Context,
+): Uri? {
+  val imagesFolder: File =
+    File(
+      context.cacheDir,
+      "images",
+    )
+  var uri: Uri? = null
+  try {
+    imagesFolder.mkdirs()
+    val file = File(imagesFolder, "shared_image.png")
+
+    val stream = FileOutputStream(file)
+    image.compress(Bitmap.CompressFormat.PNG, 90, stream)
+    stream.flush()
+    stream.close()
+    uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+  } catch (e: IOException) {
+    Log.e("Share", "IOException while trying to write file for sharing: " + e.message)
+  }
+  return uri
 }
 
 @Composable
@@ -503,6 +547,18 @@ fun TranslatorApp(
         currentLaunchMode = message.newLaunchMode
         modalVisible = currentLaunchMode == LaunchMode.Normal
         Log.d("ChangeLaunchMode", "Changed launch mode to: ${message.newLaunchMode}")
+      }
+
+      TranslatorMessage.ShareTranslatedImage -> {
+        scope.launch {
+          val di = displayImage
+          if (di != null) {
+            val imageUri = saveImage(di, context)
+            if (imageUri != null) {
+              shareImageUri(imageUri, context)
+            }
+          }
+        }
       }
     }
   }
